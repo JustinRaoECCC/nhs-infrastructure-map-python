@@ -1,0 +1,452 @@
+// add_infra.js
+// Implements the client‑side logic for the “Add Infrastructure” modal: loading lookups, validating input, and gathering extra sections.
+document.addEventListener('DOMContentLoaded', () => {
+    
+  // ── Grab elements ───────────────────────────────────────────────────────────
+  const addInfraModal = document.getElementById('addInfraModal');
+  const closeModalBtn = addInfraModal.querySelector('.close-modal');
+
+  const selectLocation = document.getElementById('selectLocation');
+  const inputNewLocation = document.getElementById('inputNewLocation');
+  const btnSaveLocation = document.getElementById('btnSaveLocation');
+
+  const selectAssetType = document.getElementById('selectAssetType');
+  const assetTypeContainer = document.getElementById('assetTypeContainer');
+  const inputNewAssetType = document.getElementById('inputNewAssetType');
+  const btnSaveAssetType = document.getElementById('btnSaveAssetType');
+
+  const generalInfoForm = document.getElementById('generalInfoForm');
+  const inputStationId = document.getElementById('inputStationId');
+  const inputSiteName = document.getElementById('inputSiteName');
+  const inputStatus = document.getElementById('inputStatus');
+  const inputLatitude = document.getElementById('inputLatitude');
+  const inputLongitude = document.getElementById('inputLongitude');
+  const btnSaveGeneralInfo = document.getElementById('btnSaveGeneralInfo');
+  const btnCreateStation = document.getElementById('btnCreateStation');
+  const createStationMessage = document.getElementById('createStationMessage');
+
+  const sectionsContainer = document.getElementById('sectionsContainer');
+  const btnAddSection = document.getElementById('btnAddSection');
+  const sectionsForms = document.getElementById('sectionsForms');
+
+  const btnAddCompany = document.getElementById('btnAddCompany');
+  const addCompanyModal = document.getElementById('addCompanyModal');
+  const selectCompany = document.getElementById('selectCompany');
+  const inputNewCompany = document.getElementById('inputNewCompany');
+  const btnSaveCompany = document.getElementById('btnSaveCompany');
+  const btnConfirmCompany = document.getElementById('btnConfirmCompany');
+  const closeCompanyModal = addCompanyModal.querySelector('.close-modal');
+
+  const addLocationModal = document.getElementById('addLocationModal');
+  const selectLocationModal = document.getElementById('selectLocationModal');
+  const inputNewLocationModal = document.getElementById('inputNewLocationModal');
+  const btnSaveLocationModal = document.getElementById('btnSaveLocationModal');
+  const btnConfirmLocationModal = document.getElementById('btnConfirmLocationModal');
+  const closeLocationModal = addLocationModal.querySelector('.close-modal');
+
+  const addAssetTypeModal = document.getElementById('addAssetTypeModal');
+  const selectAssetTypeModal = document.getElementById('selectAssetTypeModal');
+  const inputNewAssetTypeModal = document.getElementById('inputNewAssetTypeModal');
+  const btnSaveAssetTypeModal = document.getElementById('btnSaveAssetTypeModal');
+  const btnConfirmAssetTypeModal = document.getElementById('btnConfirmAssetTypeModal');
+  const closeAssetTypeModal = addAssetTypeModal.querySelector('.close-modal');
+
+  let existingStationIDs = new Set();
+  let extraSections = {};
+  let selectedCompany = null;
+  let selectedLocation = null;
+
+  // ── Modal open/close ─────────────────────────────────────────────────────────
+  function openModal() {
+    addInfraModal.style.display = 'flex';
+  }
+
+  function closeModal() {
+    addInfraModal.style.display = 'none';
+    resetModal();
+  }
+
+  closeModalBtn.addEventListener('click', closeModal);
+
+  addInfraModal.addEventListener('click', e => {
+    if (e.target === addInfraModal) closeModal();
+  });
+
+  // ── Load lookups & populate dropdowns ───────────────────────────────────────
+  async function loadLookups() {
+    const locRes = await window.electronAPI.getLocations();
+    const atRes  = await window.electronAPI.getAssetTypes();
+    buildDropdown(selectLocation, locRes);
+    buildDropdown(selectAssetType, atRes);
+  }
+
+  function buildDropdown(sel, items) {
+    sel.innerHTML = `<option value="">-- select --</option>`;
+    items.forEach(i => {
+      const o = document.createElement('option');
+      o.value = o.textContent = i;
+      sel.appendChild(o);
+    });
+  }
+
+  // ── Add new location / asset type ───────────────────────────────────────────
+  btnSaveLocation.addEventListener('click', async () => {
+    const v = inputNewLocation.value.trim();
+    if (!v) return;
+    const res = await window.electronAPI.addNewLocation(v);
+    if (res.success) {
+      await loadLookups();
+      selectLocation.value = v;
+      inputNewLocation.value = '';
+    } else {
+      alert(res.message);
+    }
+  });
+
+  btnSaveAssetType.addEventListener('click', async () => {
+    const v = inputNewAssetType.value.trim();
+    if (!v) return;
+    const res = await window.electronAPI.addNewAssetType(v);
+    if (res.success) {
+      await loadLookups();
+      selectAssetType.value = v;
+      inputNewAssetType.value = '';
+    } else {
+      alert(res.message);
+    }
+  });
+
+  // ── Show general-info form when lookups chosen ──────────────────────────────
+  selectLocation.addEventListener('change', () => {
+    assetTypeContainer.style.display = selectLocation.value ? 'block' : 'none';
+    maybeShowGeneralForm();
+  });
+
+  selectAssetType.addEventListener('change', maybeShowGeneralForm);
+
+  function maybeShowGeneralForm() {
+    generalInfoForm.style.display =
+      selectLocation.value && selectAssetType.value
+        ? 'block'
+        : 'none';
+  }
+
+  // ── Load existing station IDs to prevent duplicates ─────────────────────────
+  async function loadExistingStationIDs() {
+    try {
+      const data = await window.electronAPI.getStationData();
+      existingStationIDs = new Set(data.map(s => String(s.station_id)));
+    } catch {
+      existingStationIDs = new Set();
+    }
+  }
+
+  // ── Save general info, reveal Create & Sections UI ──────────────────────────
+  btnSaveGeneralInfo.addEventListener('click', () => {
+    const sid = inputStationId.value.trim();
+    if (!sid) {
+      createStationMessage.textContent = 'Station ID required';
+      return;
+    }
+    if (existingStationIDs.has(sid)) {
+      createStationMessage.textContent = `Station ID "${sid}" exists`;
+      return;
+    }
+    const lat = parseFloat(inputLatitude.value);
+    const lon = parseFloat(inputLongitude.value);
+    if (isNaN(lat) || isNaN(lon)) {
+      createStationMessage.textContent = 'Invalid coordinates';
+      return;
+    }
+
+    btnSaveGeneralInfo.style.display = 'none';
+    btnCreateStation.style.display   = 'inline-block';
+    createStationMessage.textContent  = '';
+    sectionsContainer.style.display   = 'block';
+  });
+
+  // ── Build a new Section block with name, fields, delete buttons ────────────
+  function createSectionBlock() {
+    const sectionDiv = document.createElement('div');
+    sectionDiv.classList.add('section-block');
+    sectionDiv.style = 'border:1px #ccc solid; padding:1em; margin-bottom:1em;';
+
+    sectionDiv.innerHTML = `
+      <div style="display:flex; align-items:center; margin-bottom:0.5em;">
+        <input
+          class="section-name"
+          placeholder="Section name (e.g. Structural Info)"
+          style="flex:1; padding:0.3em;"
+        />
+        <button
+          type="button"
+          class="delete-section"
+          style="margin-left:0.5em; color:red;"
+        >Delete Section</button>
+      </div>
+      <div class="fields-container" style="margin-bottom:0.5em;"></div>
+      <button type="button" class="btnAddField">+ Add Field</button>
+    `;
+
+    // Delete entire section
+    sectionDiv.querySelector('.delete-section')
+      .addEventListener('click', () => {
+        const title = sectionDiv.querySelector('.section-name').value.trim();
+        delete extraSections[title];
+        sectionsForms.removeChild(sectionDiv);
+      });
+
+    // Add a new field row
+    sectionDiv.querySelector('.btnAddField')
+      .addEventListener('click', () => {
+        const fieldsCt = sectionDiv.querySelector('.fields-container');
+        const row = document.createElement('div');
+        row.style = 'display:flex; align-items:center; margin-bottom:0.3em;';
+        row.innerHTML = `
+          <input
+            class="field-name"
+            placeholder="Field name"
+            style="flex:1; padding:0.2em; margin-right:0.5em;"
+          />
+          <input
+            class="field-value"
+            placeholder="Value"
+            style="flex:1; padding:0.2em; margin-right:0.5em;"
+          />
+          <button type="button" class="delete-field" style="color:red;">×</button>
+        `;
+        // Delete that field row
+        row.querySelector('.delete-field')
+          .addEventListener('click', () => fieldsCt.removeChild(row));
+
+        fieldsCt.appendChild(row);
+      });
+
+    sectionsForms.appendChild(sectionDiv);
+  }
+
+  // ── Wire up Add Section button ─────────────────────────────────────────────
+  btnAddSection.addEventListener('click', () => {
+    createSectionBlock();
+  });
+
+  // ── Final “Create Station”: harvest everything & send to backend ───────────
+  btnCreateStation.addEventListener('click', async () => {
+    // Rebuild extraSections from the DOM
+    extraSections = {};
+    sectionsForms.querySelectorAll('.section-block').forEach(sec => {
+      const title = sec.querySelector('.section-name').value.trim();
+      if (!title) return;
+      const fields = {};
+      sec.querySelectorAll('.fields-container > div').forEach(row => {
+        const name  = row.querySelector('.field-name').value.trim();
+        const value = row.querySelector('.field-value').value.trim();
+        if (name) fields[name] = value;
+      });
+      extraSections[title] = fields;
+    });
+
+    // Gather general info values
+    const location  = selectLocation.value;
+    const assetType = selectAssetType.value;
+    const stationId = inputStationId.value.trim();
+    const siteName  = inputSiteName.value.trim();
+    const status    = inputStatus.value.trim() || 'UNKNOWN';
+    const latitude  = parseFloat(inputLatitude.value);
+    const longitude = parseFloat(inputLongitude.value);
+
+    // Final validation
+    if (!stationId || !siteName || isNaN(latitude) || isNaN(longitude)) {
+      createStationMessage.textContent =
+        'Fill in all General Information fields correctly.';
+      return;
+    }
+
+    const stationObj = {
+      location,
+      assetType,
+      generalInfo: {
+        stationId,
+        siteName,
+        province:  location,
+        latitude,
+        longitude,
+        status
+      },
+      extraSections
+    };
+
+    try {
+      const res = await window.electronAPI.createNewStation(stationObj);
+      if (!res.success) {
+        createStationMessage.textContent = `Error: ${res.message}`;
+        return;
+      }
+      createStationMessage.style.color = 'green';
+      createStationMessage.textContent = 'Station created successfully!';
+      // TODO: refresh map/list views here
+      setTimeout(() => closeModal(), 1000);
+    } catch (err) {
+      createStationMessage.textContent = `Error: ${err.message}`;
+    }
+  });
+
+  // ── Reset modal to initial state ────────────────────────────────────────────
+  function resetModal() {
+    selectLocation.value       = '';
+    inputNewLocation.value     = '';
+    assetTypeContainer.style.display = 'none';
+    selectAssetType.value      = '';
+    inputNewAssetType.value    = '';
+
+    generalInfoForm.style.display       = 'none';
+    btnSaveGeneralInfo.style.display    = 'inline-block';
+    inputStationId.value                = '';
+    inputSiteName.value                 = '';
+    inputStatus.value                   = '';
+    inputLatitude.value                 = '';
+    inputLongitude.value                = '';
+
+    btnCreateStation.style.display = 'none';
+    createStationMessage.textContent = '';
+    createStationMessage.style.color = '';
+
+    sectionsContainer.style.display = 'none';
+    sectionsForms.innerHTML         = '';
+    extraSections                   = {};
+  }
+
+  function openCompanyModal() {
+    addCompanyModal.style.display = 'flex';
+  }
+
+  function closeCompanyModalFn() {
+    addCompanyModal.style.display = 'none';
+  }
+
+  btnAddCompany.addEventListener('click', async () => {
+    console.log('Add Company button clicked');
+    await loadCompanies();
+    openCompanyModal();
+  });
+
+
+  closeCompanyModal.addEventListener('click', closeCompanyModalFn);
+
+  btnSaveCompany.addEventListener('click', async () => {
+    const name = inputNewCompany.value.trim();
+    if (!name) return;
+    await window.electronAPI.addNewCompany(name);
+    await loadCompanies();
+    selectCompany.value = name;
+    inputNewCompany.value = '';
+  });
+
+  btnConfirmCompany.addEventListener('click', () => {
+    closeCompanyModalFn();
+    buildFilterTree();  // Refresh sidebar filters after confirming
+  });
+
+  async function loadCompanies() {
+    const comps = await window.electronAPI.getCompanies();
+    selectCompany.innerHTML = `<option value="">-- select --</option>`;
+    comps.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      selectCompany.appendChild(opt);
+    });
+  }
+
+  function openLocationModal(companyName) {
+    selectedCompany = companyName;
+    addLocationModal.style.display = 'flex';
+    loadLocationsForModal(companyName);
+  }
+
+  function closeLocationModalFn() {
+    addLocationModal.style.display = 'none';
+  }
+
+  async function loadLocationsForModal(companyName) {
+    const locations = await window.electronAPI.getLocationsForCompany(companyName);
+    selectLocationModal.innerHTML = `<option value="">-- select --</option>`;
+    locations.forEach(loc => {
+      const opt = document.createElement('option');
+      opt.value = loc;
+      opt.textContent = loc;
+      selectLocationModal.appendChild(opt);
+    });
+  }
+
+  btnSaveLocationModal.addEventListener('click', async () => {
+    const name = inputNewLocationModal.value.trim();
+    if (!name) return;
+    const res = await window.electronAPI.addLocationUnderCompany(selectedCompany, name);
+    if (!res.success) {
+      alert(res.message);
+      return;
+    }    await loadLocationsForModal(selectedCompany);
+    selectLocationModal.value = name;
+    inputNewLocationModal.value = '';
+  });
+
+  btnConfirmLocationModal.addEventListener('click', () => {
+    closeLocationModalFn();
+    buildFilterTree();
+  });
+
+  closeLocationModal.addEventListener('click', closeLocationModalFn);
+
+  function openAssetTypeModal(companyName, locationName) {
+    selectedCompany  = companyName;
+    selectedLocation = locationName;
+    addAssetTypeModal.style.display = 'flex';
+    loadAssetTypesForModal(companyName, locationName);
+  }
+
+  function closeAssetTypeModalFn() {
+    addAssetTypeModal.style.display = 'none';
+  }
+
+  async function loadAssetTypesForModal(companyName, locationName) {
+    const ats = await window.electronAPI.getAssetTypesForLocation(companyName, locationName);
+    selectAssetTypeModal.innerHTML = `<option value="">-- select --</option>`;
+    ats.forEach(at => {
+      const opt = document.createElement('option');
+      opt.value = at;
+      opt.textContent = at;
+      selectAssetTypeModal.appendChild(opt);
+    });
+  }
+
+  btnSaveAssetTypeModal.addEventListener('click', async () => {
+    const name = inputNewAssetTypeModal.value.trim();
+    if (!name) return;
+    const res = await window.electronAPI.addAssetTypeUnderLocation(name, selectedCompany, selectedLocation);
+    if (!res.success) { alert(res.message); return; }    await loadAssetTypesForModal(selectedCompany, selectedLocation);
+    selectAssetTypeModal.value = name;
+    inputNewAssetTypeModal.value = '';
+  });
+
+  btnConfirmAssetTypeModal.addEventListener('click', () => {
+    closeAssetTypeModalFn();
+    buildFilterTree();
+  });
+
+  closeAssetTypeModal.addEventListener('click', closeAssetTypeModalFn);
+
+  
+  window.openLocationModal = openLocationModal;
+  window.openAssetTypeModal = openAssetTypeModal;
+
+  window.prefillAndOpenAddInfraModal = function (location, assetType) {
+    selectLocation.value = location;
+    selectAssetType.value = assetType;
+    maybeShowGeneralForm();
+    openModal();  // Already declared in this file
+  };
+
+
+});
+

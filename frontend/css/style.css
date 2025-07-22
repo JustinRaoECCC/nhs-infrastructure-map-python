@@ -1,0 +1,504 @@
+/* style.css */
+/* Defines the global styles, layout, and theming for the entire front‑end UI. */
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Global reset + font                                                   */
+/* ───────────────────────────────────────────────────────────────────────── */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Flex container for the entire app */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Title Bar (two rows)                                                  */
+/* ───────────────────────────────────────────────────────────────────────── */
+.title-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+}
+
+/* Row 1: Title */
+.title-bar h1 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+  color: #333;
+}
+
+/* Row 2: Controls full-width flex container */
+.controls-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* Centered group of dropdowns + download */
+.center-group {
+  display: flex;
+  gap: 8px;
+  margin: 0 auto;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Dropdowns & buttons in center-group                                    */
+/* ───────────────────────────────────────────────────────────────────────── */
+.center-group .dropbtn,
+.center-group button#btn-download {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.center-group .dropbtn:hover,
+.center-group button#btn-download:hover {
+  background: #e0e0e0;
+}
+
+/* Active view button styling (if you toggle .active) */
+.center-group button.active {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+/* Download button special colors */
+#btn-download {
+  background-color: #007bff !important;
+  border-color: #007bff !important;
+  color: #fff !important;
+}
+#btn-download:hover {
+  background-color: #0069d9 !important;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Dropdown menu styling                                                  */
+/* ───────────────────────────────────────────────────────────────────────── */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dropbtn {
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.dropdown-content {
+  display: none;
+  position: absolute;
+  top: 100%; left: 0;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  min-width: 160px;
+  z-index: 1000;
+}
+.dropdown-content a {
+  display: block;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: #333;
+}
+.dropdown-content a:hover {
+  background: #f0f0f0;
+}
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Map‑emoji toggle on the far right of controls row                       */
+/* ───────────────────────────────────────────────────────────────────────── */
+#btnToggleBasemap {
+  margin-right: 20px;
+  width: 36px;
+  height: 36px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.2s;
+}
+#btnToggleBasemap:hover {
+  background: #e8e8e8;
+}
+
+/* Make sure leaflet controls sit below the header */
+.leaflet-control-container {
+  z-index: 0;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Main View: Filter Panel + Map + Details Panel                           */
+/* ───────────────────────────────────────────────────────────────────────── */
+.main-view-wrapper {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.main-content {
+  display: flex;
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.left-panel, .right-panel {
+  padding: 15px;
+  background-color: #f9f9f9;
+  overflow-y: auto;
+  font-size: 0.9em;
+  transition: width 0.3s, padding 0.3s, opacity 0.3s;
+  flex-shrink: 0;
+}
+.left-panel {
+  width: 280px;
+  border-right: 1px solid #ccc;
+}
+.right-panel {
+  width: 350px;
+  border-left: 1px solid #ccc;
+}
+
+.map-container {
+  flex-grow: 1;
+  position: relative;
+}
+.map-container #map {
+  width: 100%;
+  height: 100%;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* “Add Infrastructure” Button                                             */
+/* ───────────────────────────────────────────────────────────────────────── */
+#btnAddCompany {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 500;
+  padding: 8px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+/* slightly darken on hover */
+#btnAddCompany:hover {
+    filter: brightness(0.9);
+}
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Modal + Overlay                                                         */
+/* ───────────────────────────────────────────────────────────────────────── */
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 90%;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-height: 90%;
+  overflow-y: auto;
+}
+.modal-header {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+}
+.close-modal {
+  position: absolute;
+  top: 0.75rem;
+  right: 1rem;
+  cursor: pointer;
+  font-size: 1.25rem;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Filter Group                                                            */
+/* ───────────────────────────────────────────────────────────────────────── */
+.filter-group {
+  margin-bottom: 15px;
+}
+.filter-group label {
+  display: block;
+  margin-bottom: 4px;
+}
+.filter-group input[type="checkbox"] {
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Station Details                                                          */
+/* ───────────────────────────────────────────────────────────────────────── */
+#station-details p {
+  margin: 0;
+}
+#station-details table {
+  width: 100%;
+  border-collapse: collapse;
+}
+#station-details th {
+  text-align: left;
+  padding: 4px;
+  background: #e8e8e8;
+  width: 40%;
+}
+#station-details td {
+  padding: 4px;
+  border-bottom: 1px solid #ddd;
+}
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Extra‑Sections styling                                                   */
+/* ───────────────────────────────────────────────────────────────────────── */
+#sectionsContainer {
+  margin-top: 1.5rem;
+}
+
+.section-block {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fafafa;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Section header: name input + delete button */
+.section-block > div:first-child {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.section-block .section-name {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.section-block .delete-section {
+  margin-left: 0.5rem;
+  background: none;
+  border: none;
+  color: #d9534f; /* bootstrap danger red */
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* Fields container: each row = name/value/delete */
+.fields-container > div {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.field-name,
+.field-value {
+  flex: 1;
+  padding: 0.5rem;
+  margin-right: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.delete-field {
+  background: none;
+  border: none;
+  color: #d9534f;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* “+ Add Field” & “+ Add Section” buttons */
+.btnAddField,
+#btnAddSection {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  background: #fff;
+  color: #007bff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btnAddField:hover,
+#btnAddSection:hover {
+  background: #007bff;
+  color: #fff;
+}
+
+/* Align the overall modal buttons neatly */
+#sectionsContainer button,
+#generalInfoForm button {
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Ensure inputs in modal are full-width in their group */
+#generalInfoForm input,
+.section-block .section-name,
+.field-name,
+.field-value {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Collapsed state: hide panel completely */
+.left-panel.collapsed,
+.right-panel.collapsed {
+  width: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Headings inside panels */
+.left-panel h2,
+.right-panel h2 {
+  margin-top: 0;
+  font-size: 1.2em;
+}
+
+/* Detail panel content paragraphs */
+#detailsContent p {
+  margin-top: 0;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+#detailsContent strong {
+  display: inline-block;
+  min-width: 120px;
+  margin-right: 5px;
+}
+#detailsContent hr {
+  border: 0;
+  height: 1px;
+  background-color: #ddd;
+  margin: 10px 0;
+}
+#detailsContent h4 {
+  margin-top: 15px;
+  margin-bottom: 5px;
+  font-size: 1.1em;
+  color: #333;
+}
+
+/* Print Styles for right panel */
+@media print {
+  .left-panel,
+  .right-panel {
+    width: 200px !important;
+    opacity: 1 !important;
+    padding: 10px !important;
+    border: 1px solid #ccc !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .left-panel.collapsed,
+  .right-panel.collapsed {
+    display: none !important;
+  }
+}
+
+
+/* Filter stuff */
+.collapsible-wrapper {
+  margin-bottom: 5px;
+}
+
+.collapsible-header {
+  background: #e0e0e0;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.collapsible-content {
+  display: none;
+  padding-left: 15px;
+}
+
+.collapsible-child {
+  padding: 3px 10px;
+  cursor: pointer;
+  color: #007bff;
+}
+
+.collapsible-child:hover {
+  background: #f0f0f0;
+}
+
+.collapsible-wrapper {
+  margin-bottom: 0.5em;
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  padding: 0.2em 0;
+  border-bottom: 1px solid #ddd;
+  background: #eee;
+}
+
+.collapsible-title {
+  cursor: pointer;
+  flex: 1;
+}
+
+.open-modal-button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1em;
+  padding: 0 0.5em;
+  color: #007bff;
+}
+
+.collapsible-content {
+  display: none;
+  padding-left: 1em;
+}
+
+.toggle-collapse-button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1em;
+  margin-right: 0.5em;
+  color: #007bff;
+}

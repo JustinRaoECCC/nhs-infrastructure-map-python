@@ -1,0 +1,103 @@
+# backend/app.py
+# Defines the Eel‑exposed functions that drive the front‑end, delegating all data operations to the DataManager façade.
+
+import os
+import glob
+import openpyxl
+from openpyxl.utils import get_column_letter
+
+import pandas as pd
+import eel
+
+from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files
+from .data_manager     import DataManager
+
+from .repairs_manager import save_repair
+
+# ─── Station file constants ─────────────────────────────────────────────────
+HERE = os.path.dirname(__file__)
+DATA_DIR = os.path.abspath(os.path.join(HERE, '..', 'data'))
+ASSET_TYPES_DIR = os.path.join(DATA_DIR, 'asset_types')
+
+# ─── Bootstrap folder + lookups on import ──────────────────────────────────
+ensure_data_folder()
+ensure_lookups_file()
+dm = DataManager()
+
+# ─── Exposed Lookup APIs ───────────────────────────────────────────────────
+@eel.expose
+def get_locations():
+    return dm.get_locations()
+
+@eel.expose
+def add_new_location(new_loc):
+    return dm.add_location(new_loc)
+
+@eel.expose
+def get_asset_types():
+    return dm.get_asset_types()
+
+@eel.expose
+def add_new_asset_type(new_at):
+    return dm.add_asset_type(new_at)
+
+@eel.expose
+def delete_all_data_files_api():
+    return delete_all_data_files_api()
+
+# ─── Station data APIs ──────────────────────────────────────────────────────
+@eel.expose
+def get_infrastructure_data():
+    return dm.list_stations()
+
+@eel.expose
+def create_new_station(station_obj: dict):
+    return dm.create_station(station_obj)
+
+@eel.expose
+def create_new_repair(station_id: str, repair_obj: dict):
+    """
+    Called by your modal’s createNewRepair:
+      window.electronAPI.createNewRepair(stationId, { ranking, cost, freq });
+    """
+    return dm.save_repair(station_id, repair_obj)
+
+@eel.expose
+def get_companies():
+    return dm.get_companies()
+
+@eel.expose
+def add_new_company(name):
+    return dm.add_company(name)
+
+@eel.expose
+def get_locations_for_company(company_name):
+    return dm.get_locations_for_company(company_name)
+
+@eel.expose
+def get_asset_types_for_location(company_name, location_name):
+    return dm.get_asset_types_for_location(company_name, location_name)
+
+@eel.expose
+def add_asset_type_under_location(asset_type_name, company_name, location_name):
+    return dm.add_asset_type_under_location(asset_type_name, company_name, location_name)
+
+@eel.expose
+def get_active_filters():
+    return dm.get_active_filters()
+
+@eel.expose
+def add_location_under_company(location_name, company_name):
+    """
+    Called by the “Add / Select Location” modal:
+      window.electronAPI.addLocationUnderCompany(company, location) 
+    """
+    return dm.add_location_under_company(location_name, company_name)
+
+# ─── App startup ────────────────────────────────────────────────────────────
+def main():
+    eel.init('frontend')
+    eel.start('index.html', size=(1200, 800))
+
+if __name__ == '__main__':
+    main()

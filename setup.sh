@@ -1,0 +1,1 @@
+# A shell script to automate environment setup tasks (e.g. creating a venv, installing dependencies, initializing the database).

@@ -1,0 +1,174 @@
+<!-- index.html -->
+<!-- The main HTML structure, including the Leaflet map container and the “Add Infrastructure” modal. -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NHS Infrastructure Map</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Title Bar -->
+    <header class="title-bar">
+      <!-- Title row -->
+      <h1>NHS Infrastructure Map</h1>
+
+      <!-- Controls row: centered group + right‑aligned map button -->
+      <div class="controls-row">
+        <div class="center-group">
+          <!-- 1. View dropdown -->
+          <div class="dropdown">
+            <button class="dropbtn">View ▾</button>
+            <div class="dropdown-content">
+              <a href="#" id="btn-map-view">Map View</a>
+              <a href="#" id="btn-list-view">List View</a>
+              <a href="#" id="btn-priority-view">Priority View</a>
+            </div>
+          </div>
+
+          <!-- 2. Map type dropdown -->
+          <div class="dropdown">
+            <button class="dropbtn">Map Type ▾</button>
+            <div class="dropdown-content">
+              <a href="#" id="btn-cat-map">Categorized Map</a>
+              <a href="#" id="btn-priority-map">Priority Map</a>
+            </div>
+          </div>
+
+          <!-- 3. Download -->
+          <button id="btn-download">Download</button>
+        </div>
+
+        <!-- 4. Map‑emoji toggle on the far right -->
+        <button id="btnToggleBasemap" title="Switch basemap">🗺️</button>
+      </div>
+    </header>
+
+    <!-- Main View -->
+    <div class="main-view-wrapper">
+      <div class="main-content">
+        <!-- Left Filter Panel -->
+        <aside class="left-panel">
+          <h2>Filters</h2>
+          <div id="filterTree">
+            <!-- Dynamically populated -->
+          </div>
+        </aside>
+
+        <!-- Map -->
+        <div class="map-container">
+          <div id="map"></div>
+        </div>
+
+        <!-- Right Details Panel -->
+        <aside class="right-panel">
+          <h2>Station Details</h2>
+          <div id="station-details">
+            <p><em>Click a pin to see details</em></p>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- Add Infrastructure Button -->
+    <button id="btnAddCompany">Add Company</button>
+
+    <!-- Add‑Infra Modal (unchanged inside) -->
+    <div id="addInfraModal" class="modal">
+      <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <h2 class="modal-header">Add Infrastructure</h2>
+        <!-- Location & Asset Type selectors -->
+        <div>
+          <label for="selectLocation">Location</label>
+          <select id="selectLocation">
+            <option value="">-- select --</option>
+          </select>
+          <input type="text" id="inputNewLocation" placeholder="New location"/>
+          <button id="btnSaveLocation">➕ Add Location</button>
+        </div>
+
+        <div id="assetTypeContainer" style="display:none; margin-top:1em;">
+          <label for="selectAssetType">Asset Type</label>
+          <select id="selectAssetType">
+            <option value="">-- select --</option>
+          </select>
+          <input type="text" id="inputNewAssetType" placeholder="New asset type"/>
+          <button id="btnSaveAssetType">➕ Add Asset Type</button>
+        </div>
+
+        <!-- General Info form (hidden until both dropdowns selected) -->
+        <form id="generalInfoForm" style="display:none; margin-top:1em;">
+          <input id="inputStationId"        placeholder="Station ID" required/>
+          <input id="inputSiteName"         placeholder="Site Name" required/>
+          <input id="inputStatus"           placeholder="Status"/>
+          <input id="inputLatitude"  type="number" step="any" placeholder="Latitude" required/>
+          <input id="inputLongitude" type="number" step="any" placeholder="Longitude" required/>
+          <button id="btnSaveGeneralInfo" type="button">Save Info</button>
+          <button id="btnCreateStation"    type="button" style="display:none;">Create Station</button>
+          <p id="createStationMessage"></p>
+        </form>
+
+        <!-- Extra Sections UI (hidden until after saving General Info) -->
+        <div id="sectionsContainer" style="display:none; margin-top:1em;">
+          <h3>Extra Sections</h3>
+          <button id="btnAddSection" type="button">+ Add Section</button>
+          <div id="sectionsForms" style="margin-top:1em;"></div>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+
+  <div id="addCompanyModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <h2 class="modal-header">Add / Select Company</h2>
+      <select id="selectCompany">
+        <option value="">-- select --</option>
+      </select>
+      <input type="text" id="inputNewCompany" placeholder="New Company Name" />
+      <button id="btnSaveCompany">➕ Add Company</button>
+      <button id="btnConfirmCompany">Confirm</button>
+    </div>
+  </div>
+
+  <div id="addLocationModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <h2 class="modal-header">Add / Select Location</h2>
+      <select id="selectLocationModal">
+        <option value="">-- select --</option>
+      </select>
+      <input type="text" id="inputNewLocationModal" placeholder="New Location Name" />
+      <button id="btnSaveLocationModal">➕ Add Location</button>
+      <button id="btnConfirmLocationModal">Confirm</button>
+    </div>
+  </div>
+
+  <div id="addAssetTypeModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <h2 class="modal-header">Add / Select Asset Type</h2>
+      <select id="selectAssetTypeModal">
+        <option value="">-- select --</option>
+      </select>
+      <input type="text" id="inputNewAssetTypeModal" placeholder="New Asset Type Name" />
+      <button id="btnSaveAssetTypeModal">➕ Add Asset Type</button>
+      <button id="btnConfirmAssetTypeModal">Confirm</button>
+    </div>
+  </div>
+
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script type="text/javascript" src="/eel.js"></script>
+  <script src="js/data_api.js"></script>
+  <script src="js/add_infra.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/map_view.js"></script>
+</body>
+</html>

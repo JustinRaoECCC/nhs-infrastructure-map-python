@@ -1,0 +1,104 @@
+===========================
+Using a New Data Storage Provider
+===========================
+
+0) What is it currently doing?
+   By default the SQLAlchemy engine is pointed at:
+   
+   DB_URL = "sqlite:///data/app.db"
+
+   (Which means an on‑disk SQLite file named app.db in the project’s data/ folder.
+   All of the tables (locations, asset_types, stations, repairs, sections) get created
+   and persisted in that single file. If you switch to Postgres/MySQL, just override
+   DB_URL in your environment (e.g. export DB_URL="postgresql://user:pass@host/dbname"),
+   and your data will go to that database instead.)
+
+READ BELOW FOR HOW TO SWITCH DATA STORAGE PROVIDERS
+
+1) Read the Persistence Interface
+   ─────────────────────────────────
+   Open `backend/persistence.py`. You’ll see the abstract class `BaseRepo` which defines:
+     • get_locations()
+     • add_location(name)
+     • get_asset_types()
+     • add_asset_type(name)
+     • list_stations()
+     • create_station(station_obj)
+     • save_repair(station_id, repair_obj)
+     • save_sections(station_id, sections)
+     • get_sections_for_station(station_id)
+
+   Any new provider must implement all of these methods.
+
+2) Create Your Provider Stub
+   ─────────────────────────────
+   1. In `backend/`, create a new file, e.g. `myrepo.py`.
+   2. Inside, import `BaseRepo`:
+        ```python
+        from .persistence import BaseRepo
+        ```
+   3. Define your class:
+        ```python
+        class MyRepo(BaseRepo):
+            def get_locations(self):
+                # return a list of strings
+                …
+
+            def add_location(self, name: str):
+                # return {"success": bool, "added": bool, ...} or bool
+                …
+
+            …and so on for every abstract method…
+        ```
+   4. Use your own APIs, clients, or libraries inside those methods.
+
+3) Wire It Into DataManager
+   ───────────────────────────
+   By default, `DataManager()` uses `ExcelRepo` (for legacy Excel) and `DBRepo` (SQL).
+   To swap in your `MyRepo`:
+
+   - Open the file where you bootstrap the app—e.g. `backend/app.py`, or in `run.py`.
+   - Instead of the default:
+     ```python
+     from .data_manager import DataManager
+     dm = DataManager()
+     ```
+     instantiate with your provider:
+     ```python
+     from .data_manager import DataManager
+     from .myrepo       import MyRepo
+
+     # To use ONLY your provider for both read/write:
+     dm = DataManager(
+         excel_provider=MyRepo(),
+         db_provider=MyRepo()
+     )
+     ```
+     Or mix & match:
+     ```python
+     dm = DataManager(
+         excel_provider=ExcelRepo(),
+         db_provider=MyRepo()
+     )
+     ```
+   - The rest of your `@eel.expose` handlers remain unchanged.
+
+4) Control Which Backend Returns Data
+   ─────────────────────────────────────
+   The environment variable `USE_DATABASE` (in `backend/config.py`) still toggles which repo’s data is _returned_ on reads:
+     - `USE_DATABASE=false`: returns from `excel_provider.get_*()` 
+     - `USE_DATABASE=true`: returns from `db_provider.get_*()`
+
+   Writes always call _both_ providers, keeping them in sync.
+
+5) Verify and Test
+   ─────────────────
+   1. Set your env var:
+      ```bash
+      export USE_DATABASE=true
+      ```
+   2. Run your app:
+      ```bash
+      python run.py
+      ```
+   3. Confirm your new provider’s storage is receiving the same writes, and that reads come from it when `USE_DATABASE=true`.
