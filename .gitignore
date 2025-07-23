@@ -1,4 +1,3 @@
 # Specifies which files and directories Git should ignore (e.g. virtual‑env folders, compiled files).
-
-.xlsx
-.db
+*.xlsx
+*.db
