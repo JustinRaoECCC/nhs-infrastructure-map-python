@@ -20,6 +20,7 @@ async function buildFilterTree() {
       const assetTypes = await window.electronAPI.getAssetTypesForLocation(company, location);
 
       for (const assetType of assetTypes) {
+        if (assetType && assetType.toLowerCase() === 'sheet') continue;
         const assetTypeDiv = document.createElement('div');
         assetTypeDiv.classList.add('collapsible-child');
         assetTypeDiv.textContent = assetType;
@@ -55,12 +56,32 @@ function createCollapsibleItem(title, type, parentCompany = null) {
   const content = document.createElement('div');
   content.classList.add('collapsible-content');
 
-  // Toggle collapse on button click
-  toggleBtn.addEventListener('click', (e) => {
+  // Left‑of‑title: toggle collapse; right‑of‑title: open modal
+  // 1) Make the “+” button itself toggle (and stop propagation)
+  toggleBtn.addEventListener('click', e => {
     e.stopPropagation();
+    // toggle collapse
     content.style.display = content.style.display === 'none' ? 'block' : 'none';
     toggleBtn.textContent = content.style.display === 'none' ? '+' : '–';
   });
+
+  // 2) On header click, decide based on X coordinate
+  header.addEventListener('click', e => {
+    const rect = titleSpan.getBoundingClientRect();
+    if (e.clientX < rect.left) {
+      // click occurred to the left of the text → toggle collapse
+      content.style.display = content.style.display === 'none' ? 'block' : 'none';
+      toggleBtn.textContent = content.style.display === 'none' ? '+' : '–';
+    } else {
+      // click to the right of the text → open the matching modal
+      if (type === 'company') {
+        window.openLocationModal(title);
+      } else if (type === 'location') {
+        window.openAssetTypeModal(parentCompany, title);
+      }
+    }
+  });
+
 
   // Open modal on title click
   titleSpan.addEventListener('click', () => {
@@ -80,9 +101,9 @@ function openAddInfrastructureModal(company, location, assetType) {
   window.prefillAndOpenAddInfraModal(location, assetType);
 }
 
+// On startup, load the full filter tree (companies → locations → asset‐types)
 document.addEventListener('DOMContentLoaded', async () => {
-  const activeFilters = await window.electronAPI.getActiveFilters();
-  buildFilterTreeFromData(activeFilters);
+  await buildFilterTree();
 });
 
 function buildFilterTreeFromData(data) {

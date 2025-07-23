@@ -2,103 +2,197 @@
 Using a New Data Storage Provider
 ===========================
 
-0) What is it currently doing?
-   By default the SQLAlchemy engine is pointed at:
-   
-   DB_URL = "sqlite:///data/app.db"
+What’s happening right now?
+---------------------------
+**Excel mode (default: USE_DATABASE=false)**
 
-   (Which means an on‑disk SQLite file named app.db in the project’s data/ folder.
-   All of the tables (locations, asset_types, stations, repairs, sections) get created
-   and persisted in that single file. If you switch to Postgres/MySQL, just override
-   DB_URL in your environment (e.g. export DB_URL="postgresql://user:pass@host/dbname"),
-   and your data will go to that database instead.)
+- All lookups and station sheets live under:  
+  `data/locations/`
 
-READ BELOW FOR HOW TO SWITCH DATA STORAGE PROVIDERS
+- One file per Location:  
+  `data/locations/<Location>.xlsx`
 
-1) Read the Persistence Interface
-   ─────────────────────────────────
-   Open `backend/persistence.py`. You’ll see the abstract class `BaseRepo` which defines:
-     • get_locations()
-     • add_location(name)
-     • get_asset_types()
-     • add_asset_type(name)
-     • list_stations()
-     • create_station(station_obj)
-     • save_repair(station_id, repair_obj)
-     • save_sections(station_id, sections)
-     • get_sections_for_station(station_id)
+- One sheet per Asset Type inside each location workbook
 
-   Any new provider must implement all of these methods.
+- Adding a new Location automatically creates `<Location>.xlsx`  
+  with sheets for every existing asset type
 
-2) Create Your Provider Stub
-   ─────────────────────────────
-   1. In `backend/`, create a new file, e.g. `myrepo.py`.
-   2. Inside, import `BaseRepo`:
-        ```python
-        from .persistence import BaseRepo
-        ```
-   3. Define your class:
-        ```python
-        class MyRepo(BaseRepo):
-            def get_locations(self):
-                # return a list of strings
-                …
+- Adding a new Asset Type automatically appends a new sheet  
+  to every location workbook
 
-            def add_location(self, name: str):
-                # return {"success": bool, "added": bool, ...} or bool
-                …
+**SQL mode (USE_DATABASE=true)**
 
-            …and so on for every abstract method…
-        ```
-   4. Use your own APIs, clients, or libraries inside those methods.
+- Backed by SQLAlchemy using `DB_URL`  
+  (default: `sqlite:///data/app.db`)
 
-3) Wire It Into DataManager
-   ───────────────────────────
-   By default, `DataManager()` uses `ExcelRepo` (for legacy Excel) and `DBRepo` (SQL).
-   To swap in your `MyRepo`:
+- All data lives in one SQLite file (or your chosen DB) with tables:  
+  `companies`, `locations`, `asset_types`, `stations`, `repairs`, `sections`
 
-   - Open the file where you bootstrap the app—e.g. `backend/app.py`, or in `run.py`.
-   - Instead of the default:
-     ```python
-     from .data_manager import DataManager
-     dm = DataManager()
-     ```
-     instantiate with your provider:
-     ```python
-     from .data_manager import DataManager
-     from .myrepo       import MyRepo
+- On reads and writes, DataManager lazy-migrates any Excel lookups  
+  (`locations` & `asset types`) into SQL so the two stay in sync
 
-     # To use ONLY your provider for both read/write:
-     dm = DataManager(
-         excel_provider=MyRepo(),
-         db_provider=MyRepo()
-     )
-     ```
-     Or mix & match:
-     ```python
-     dm = DataManager(
-         excel_provider=ExcelRepo(),
-         db_provider=MyRepo()
-     )
-     ```
-   - The rest of your `@eel.expose` handlers remain unchanged.
+- To use Postgres/MySQL, override `DB_URL` (see below)
 
-4) Control Which Backend Returns Data
-   ─────────────────────────────────────
-   The environment variable `USE_DATABASE` (in `backend/config.py`) still toggles which repo’s data is _returned_ on reads:
-     - `USE_DATABASE=false`: returns from `excel_provider.get_*()` 
-     - `USE_DATABASE=true`: returns from `db_provider.get_*()`
 
-   Writes always call _both_ providers, keeping them in sync.
+Read the Persistence Interface
+------------------------------
+Open `backend/persistence.py`. You'll find:
 
-5) Verify and Test
-   ─────────────────
-   1. Set your env var:
-      ```bash
-      export USE_DATABASE=true
-      ```
-   2. Run your app:
-      ```bash
-      python run.py
-      ```
-   3. Confirm your new provider’s storage is receiving the same writes, and that reads come from it when `USE_DATABASE=true`.
+```python
+class BaseRepo(ABC):
+    def get_locations()
+    def add_location(name)
+    def get_asset_types()
+    def add_asset_type(name)
+    def list_stations()
+    def create_station(station_obj)
+    def save_repair(station_id, repair_obj)
+    def save_sections(station_id, sections)
+    def get_sections_for_station(station_id)
+
+
+Implementing a Custom Storage Provider
+======================================
+
+Every new storage backend must implement the full `BaseRepo` interface.
+
+Step 1: Create Your Provider Stub
+---------------------------------
+In the `backend/` folder, create a new file, for example:  
+`myrepo.py`
+
+**Import the abstract base class:**
+```python
+from .persistence import BaseRepo
+
+mplement the Full Interface
+----------------------------
+In your `myrepo.py`, define a class that implements all methods from `BaseRepo`.
+
+Example:
+```python
+from .persistence import BaseRepo
+
+class MyRepo(BaseRepo):
+    def get_locations(self) -> list[str]:
+        # Return a list of location names
+        ...
+
+    def add_location(self, name: str) -> dict:
+        # Add a new location and return its record
+        ...
+
+    def get_asset_types(self) -> list[str]:
+        # Return a list of asset type names
+        ...
+
+    def add_asset_type(self, name: str) -> dict:
+        # Add a new asset type and return its record
+        ...
+
+    def list_stations(self) -> list[dict]:
+        # Return all station records
+        ...
+
+    def create_station(self, station_obj: dict) -> dict:
+        # Create a new station and return it
+        ...
+
+    def save_repair(self, station_id: int, repair_obj: dict) -> None:
+        # Save repair data for the given station
+        ...
+
+    def save_sections(self, station_id: int, sections: list[dict]) -> None:
+        # Save section data for the given station
+        ...
+
+    def get_sections_for_station(self, station_id: int) -> list[dict]:
+        # Return the sections for the given station
+        ...
+
+
+You're free to use any tools or libraries inside your implementation —  
+SQL clients, file system utilities, REST APIs, in-memory caches — whatever suits your backend.
+
+Step 2: Wire It Into DataManager
+--------------------------------
+By default, `DataManager` uses both Excel and SQL providers under the hood:
+
+```python
+# backend/data_manager.py
+
+dm = DataManager()  # Uses ExcelRepo + DBRepo internally
+
+Step 2: Use Your Custom Provider
+-------------------------------
+To fully replace both Excel and SQL backends with your own implementation, update `data_manager.py` like this:
+
+```python
+from .data_manager import DataManager
+from .myrepo       import MyRepo
+
+dm = DataManager(
+    excel_provider=MyRepo(),
+    db_provider=MyRepo()
+)
+
+Combining Your Provider with an Existing One
+--------------------------------------------
+You can mix and match providers — for example, keep Excel for lookups but use your custom repo for SQL:
+
+```python
+from .excel_repo import ExcelRepo
+from .myrepo     import MyRepo
+
+dm = DataManager(
+    excel_provider=ExcelRepo(),
+    db_provider=MyRepo()
+)
+
+✅ Your existing @eel.expose handlers don’t need to be changed — everything continues to work automatically.
+
+Step 3: Choose the Active Read Backend
+--------------------------------------
+You control which backend handles reads (`get_*()` calls) by configuring `backend/config.py`:
+
+```python
+# backend/config.py
+
+# Set to False to use Excel (.xlsx) files under data/locations/
+# Set to True to use a SQL database via DB_URL
+USE_DATABASE = False
+DB_URL = "sqlite:///data/app.db"
+
+Behavior Summary
+----------------
+- `USE_DATABASE = False` → All `get_*()` calls are handled by `ExcelRepo`
+- `USE_DATABASE = True`  → All `get_*()` calls are handled by `DBRepo`
+
+📝 Note: Regardless of mode, **write operations always go to both** providers to keep them in sync.
+
+
+Step 4: Verify & Test Your Setup
+--------------------------------
+1. Save all code changes.
+2. Select your backend mode via `backend/config.py` or environment variables.
+3. Launch the application:
+
+```bash
+python run.py
+
+✔ If running in Excel mode:
+----------------------------
+- `.xlsx` files will be created under `data/locations/`
+- Each asset type will appear as a separate sheet inside the corresponding location workbook
+
+✔ If running in SQL mode:
+--------------------------
+- Open `data/app.db` or connect to your configured SQL database
+- Verify that the following tables exist and contain data:
+  - `locations`
+  - `asset_types`
+  - `stations`
+  - (plus any other tables your schema requires)
+
+✅ With this modular setup, you can freely switch between Excel and SQL storage at any time —  
+without changing your UI, Eel handlers, or front-end logic.

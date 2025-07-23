@@ -10,7 +10,7 @@ from .lookups_manager import (
 from .repairs_manager import save_repair as lm_save_repair
 from .persistence       import BaseRepo
 import os, glob, openpyxl
-from .lookups_manager import ASSET_TYPES_DIR
+from .lookups_manager import LOCATIONS_DIR
 
 class ExcelRepo(BaseRepo):
     # ─── Lookups ─────────────────────────────────────────
@@ -29,13 +29,12 @@ class ExcelRepo(BaseRepo):
 
     # ─── Stations ────────────────────────────────────────
     def list_stations(self):
-        """Read every asset-type workbook & sheet, return flattened station list."""
         stations = []
-        for path in glob.glob(os.path.join(ASSET_TYPES_DIR, '*.xlsx')):
-            asset_type = os.path.splitext(os.path.basename(path))[0]
-            wb = openpyxl.load_workbook(path, data_only=True)
-            for sheet in wb.sheetnames:
-                ws = wb[sheet]
+        for loc_file in glob.glob(os.path.join(LOCATIONS_DIR, '*.xlsx')):
+            location = os.path.splitext(os.path.basename(loc_file))[0]
+            wb = openpyxl.load_workbook(loc_file, data_only=True)
+            for asset_type in wb.sheetnames:
+                ws = wb[asset_type]
                 headers = [c.value for c in ws[2]]
                 for row in ws.iter_rows(min_row=3, values_only=True):
                     rec = dict(zip(headers, row))
@@ -47,12 +46,11 @@ class ExcelRepo(BaseRepo):
                     station = {
                         'station_id': rec.get('Station ID'),
                         'name':       rec.get('Site Name'),
-                        'province':   rec.get('Province'),
+                        'province':   location,
                         'lat':        lat,
                         'lon':        lon,
                         'status':     rec.get('Status'),
                         'asset_type': asset_type,
-                        # include any extra‑section columns
                         **{k: v for k, v in rec.items() if k not in (
                             'Station ID','Site Name','Province',
                             'Latitude','Longitude','Status',
@@ -63,25 +61,34 @@ class ExcelRepo(BaseRepo):
         return stations
 
     def create_station(self, station_obj: dict):
-        """Flatten extraSections into Excel sheet and save new station."""
         sid      = str(station_obj['generalInfo']['stationId']).strip()
         asset    = station_obj['assetType'].strip()
-        province = station_obj['generalInfo']['province'].strip()
-        path     = os.path.join(ASSET_TYPES_DIR, f'{asset}.xlsx')
+        location = station_obj['generalInfo']['province'].strip()
+        path     = os.path.join(LOCATIONS_DIR, f'{location}.xlsx')
         if not os.path.exists(path):
-            return {'success': False, 'message': f'No workbook for asset type \"{asset}\"'}
+            return {'success': False, 'message': f'No workbook for location \"{location}\"'}
 
         wb = openpyxl.load_workbook(path)
-        if province not in wb.sheetnames:
-            return {'success': False, 'message': f'No sheet \"{province}\" in {asset}.xlsx'}
-        ws = wb[province]
+        if asset not in wb.sheetnames:
+            # auto‑create sheet for this asset type
+            ws = wb.create_sheet(title=asset)
+            headers = [
+                'Station ID','Asset Type','Site Name',
+                'Province','Latitude','Longitude',
+                'Status','Repair Ranking'
+            ]
+            for idx, col in enumerate(headers, start=1):
+                c = ws.cell(row=2, column=idx)
+                c.value = col
+        else:
+            ws = wb[asset]
 
         headers = [c.value for c in ws[2]]
         base = {
             'Station ID':  sid,
             'Asset Type':  asset,
             'Site Name':   station_obj['generalInfo']['siteName'].strip(),
-            'Province':    province,
+            'Province':    location,
             'Latitude':    station_obj['generalInfo']['latitude'],
             'Longitude':   station_obj['generalInfo']['longitude'],
             'Status':      station_obj['generalInfo']['status'].strip(),

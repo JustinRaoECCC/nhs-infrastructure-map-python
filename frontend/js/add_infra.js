@@ -332,19 +332,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   closeCompanyModal.addEventListener('click', closeCompanyModalFn);
+  // click outside Company modal to close
+  addCompanyModal.addEventListener('click', e => {
+    if (e.target === addCompanyModal) closeCompanyModalFn();
+  });
 
   btnSaveCompany.addEventListener('click', async () => {
     const name = inputNewCompany.value.trim();
     if (!name) return;
-    await window.electronAPI.addNewCompany(name);
+    // 1) persist into lookups.xlsx (col A of Companies)
+    const res = await window.electronAPI.addNewCompany(name);
+    if (!res.success) {
+      alert(res.message);
+      return;
+    }
+    // 2) reload full company list from lookup file
     await loadCompanies();
+    // 3) select the newly added company
     selectCompany.value = name;
     inputNewCompany.value = '';
   });
 
-  btnConfirmCompany.addEventListener('click', () => {
+
+  btnConfirmCompany.addEventListener('click', async () => {
+    const name = selectCompany.value;
+    if (name) {
+      // now persist and mark active
+      await window.electronAPI.addNewCompany(name);
+    }
     closeCompanyModalFn();
-    buildFilterTree();  // Refresh sidebar filters after confirming
+    buildFilterTree();
   });
 
   async function loadCompanies() {
@@ -369,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadLocationsForModal(companyName) {
-    const locations = await window.electronAPI.getLocationsForCompany(companyName);
+    const locations = await window.electronAPI.getLocations();
     selectLocationModal.innerHTML = `<option value="">-- select --</option>`;
     locations.forEach(loc => {
       const opt = document.createElement('option');
@@ -382,21 +399,34 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveLocationModal.addEventListener('click', async () => {
     const name = inputNewLocationModal.value.trim();
     if (!name) return;
-    const res = await window.electronAPI.addLocationUnderCompany(selectedCompany, name);
+    // 1) persist into lookups.xlsx (col A of Locations)
+    const res = await window.electronAPI.addNewLocation(name);
     if (!res.success) {
       alert(res.message);
       return;
-    }    await loadLocationsForModal(selectedCompany);
+    }
+    // 2) reload dropdown for this company
+    await loadLocationsForModal(selectedCompany);
+    // 3) select the newly added location
     selectLocationModal.value = name;
     inputNewLocationModal.value = '';
   });
 
-  btnConfirmLocationModal.addEventListener('click', () => {
+
+  btnConfirmLocationModal.addEventListener('click', async () => {
+    const loc = selectLocationModal.value;
+    if (loc) {
+      await window.electronAPI.addLocationUnderCompany(selectedCompany, loc);
+    }
     closeLocationModalFn();
     buildFilterTree();
   });
 
   closeLocationModal.addEventListener('click', closeLocationModalFn);
+  // click outside Location modal to close
+  addLocationModal.addEventListener('click', e => {
+    if (e.target === addLocationModal) closeLocationModalFn();
+  });
 
   function openAssetTypeModal(companyName, locationName) {
     selectedCompany  = companyName;
@@ -410,7 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadAssetTypesForModal(companyName, locationName) {
-    const ats = await window.electronAPI.getAssetTypesForLocation(companyName, locationName);
+    const ats = await window.electronAPI.getAssetTypes();
     selectAssetTypeModal.innerHTML = `<option value="">-- select --</option>`;
     ats.forEach(at => {
       const opt = document.createElement('option');
@@ -423,30 +453,58 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveAssetTypeModal.addEventListener('click', async () => {
     const name = inputNewAssetTypeModal.value.trim();
     if (!name) return;
-    const res = await window.electronAPI.addAssetTypeUnderLocation(name, selectedCompany, selectedLocation);
-    if (!res.success) { alert(res.message); return; }    await loadAssetTypesForModal(selectedCompany, selectedLocation);
+    // 1) persist into lookups.xlsx (col A of AssetTypes)
+    const res = await window.electronAPI.addNewAssetType(name);
+    if (!res.success) {
+      alert(res.message);
+      return;
+    }
+    // 2) reload dropdown for this company & location
+    await loadAssetTypesForModal(selectedCompany, selectedLocation);
+    // 3) select the newly added asset type
     selectAssetTypeModal.value = name;
     inputNewAssetTypeModal.value = '';
   });
 
-  btnConfirmAssetTypeModal.addEventListener('click', () => {
+
+
+  btnConfirmAssetTypeModal.addEventListener('click', async () => {
+    const at = selectAssetTypeModal.value;
+    if (at) {
+      await window.electronAPI.addAssetTypeUnderLocation(at, selectedCompany, selectedLocation);
+    }
     closeAssetTypeModalFn();
     buildFilterTree();
   });
-
+  
   closeAssetTypeModal.addEventListener('click', closeAssetTypeModalFn);
-
+  // click outside AssetType modal to close
+  addAssetTypeModal.addEventListener('click', e => {
+    if (e.target === addAssetTypeModal) closeAssetTypeModalFn();
+  });
   
   window.openLocationModal = openLocationModal;
   window.openAssetTypeModal = openAssetTypeModal;
 
   window.prefillAndOpenAddInfraModal = function (location, assetType) {
-    selectLocation.value = location;
-    selectAssetType.value = assetType;
-    maybeShowGeneralForm();
-    openModal();  // Already declared in this file
-  };
+    // stash the pre‑selected values
+    selectLocation.value    = location;
+    selectAssetType.value   = assetType;
 
+    // hide the lookup dropdowns (we already know company→location→assetType)
+    selectLocation.parentElement.style.display = 'none';
+    assetTypeContainer.style.display           = 'none';
+
+    // immediately show the General Info form
+    generalInfoForm.style.display      = 'block';
+    btnSaveGeneralInfo.style.display   = 'inline-block';
+    btnCreateStation.style.display     = 'none';   // still hidden until Save Info
+    sectionsContainer.style.display    = 'none';
+    createStationMessage.textContent   = '';
+
+    openModal();
+
+  }
 
 });
 

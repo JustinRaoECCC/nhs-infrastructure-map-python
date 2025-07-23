@@ -96,6 +96,8 @@ class DataManager:
         return self.excel.list_stations()
 
     def create_station(self, station_obj: dict):
+        self._migrate_asset_types()
+        self._migrate_locations()
         x = self.excel.create_station(station_obj)
         d = self.db.create_station(station_obj)
         return d if self.use_db else x
@@ -144,24 +146,59 @@ class DataManager:
     def get_asset_types_for_location(self, company_name: str, location_name: str):
         if self.use_db:
             return self.db.get_asset_types_for_location(company_name, location_name)
-        return []
+        # Excel mode: list the sheets in the location workbook
+        from .lookups_manager import LOCATIONS_DIR
+        import os, openpyxl
+        path = os.path.join(LOCATIONS_DIR, f'{location_name}.xlsx')
+        if not os.path.exists(path):
+            return []
+        wb = openpyxl.load_workbook(path, read_only=True)
+        return wb.sheetnames
 
     def add_asset_type_under_location(self, asset_type_name: str, company_name: str, location_name: str):
-        if self.use_db:
-            return self.db.add_asset_type_under_location(asset_type_name, company_name, location_name)
-        return {"success": False, "message": "Not supported in Excel mode"}
+        # --- Excel mode only: record parent and create sheet ---
+        from .lookups_manager import update_lookup_parent, add_new_location, LOCATIONS_DIR
+        import os, openpyxl
+
+        # 1) mark the parent in lookups.xlsx (col B of AssetTypes)
+        update_lookup_parent('AssetTypes', asset_type_name, location_name)
+
+        # 2) ensure location workbook exists
+        loc_path = os.path.join(LOCATIONS_DIR, f'{location_name}.xlsx')
+        if not os.path.exists(loc_path):
+            # if missing, rebuild it
+            add_new_location(location_name)
+
+        # 3) open and add a new sheet if needed
+        wb = openpyxl.load_workbook(loc_path)
+        if asset_type_name not in wb.sheetnames:
+            # add the new asset-type sheet
+            ws = wb.create_sheet(title=asset_type_name)
+            # remove the default blank sheet if it's still there
+            if 'Sheet' in wb.sheetnames:
+                wb.remove(wb['Sheet'])
+            headers = [
+                'Station ID','Asset Type','Site Name',
+                'Province','Latitude','Longitude',
+                'Status','Repair Ranking'
+            ]
+            for idx, col in enumerate(headers, start=1):
+                ws.cell(row=2, column=idx, value=col)
+            wb.save(loc_path)
+            return {"success": True, "added": True}
+        return {"success": True, "added": False}
 
     def add_location_under_company(self, location_name: str, company_name: str):
         if self.use_db:
             return self.db.add_location_under_company(location_name, company_name)
-        # Excel: append to LOOKUPS_PATH sheet 'Locations' with company in col B
-        from .lookups_manager import append_to_lookup
+        # 1) record the parent in lookups.xlsx (col B of Locations)
+        from .lookups_manager import update_lookup_parent, add_new_location
 
-        ok = append_to_lookup('Locations', location_name, company_name)
-        return {
-            "success": ok,
-            "message": None if ok else "Location was empty or already existed."
-        }
+        ok = update_lookup_parent('Locations', location_name, company_name)
+        # 2) ensure the physical workbook exists
+        add_new_location(location_name)
+        return {"success": ok}
+
 
 
     def get_active_filters(self):

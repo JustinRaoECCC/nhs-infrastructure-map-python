@@ -14,6 +14,7 @@ HERE = os.path.dirname(__file__)
 DATA_DIR = os.path.abspath(os.path.join(HERE, '..', 'data'))
 ASSET_TYPES_DIR = os.path.join(DATA_DIR, 'asset_types')
 LOOKUPS_PATH = os.path.join(DATA_DIR, 'lookups.xlsx')
+LOCATIONS_DIR   = os.path.join(DATA_DIR, 'locations')
 
 # ─── Per‑asset‑type locks ────────────────────────────────────────────────────
 _lock_dict = {}
@@ -26,6 +27,7 @@ def _get_lock(key: str):
 def ensure_data_folder():
     os.makedirs(DATA_DIR,        exist_ok=True)
     os.makedirs(ASSET_TYPES_DIR, exist_ok=True)
+    os.makedirs(LOCATIONS_DIR,   exist_ok=True)
 
 def ensure_lookups_file():
     """
@@ -35,12 +37,19 @@ def ensure_lookups_file():
     ensure_data_folder()
 
     if not os.path.exists(LOOKUPS_PATH):
-        # fresh file: create Companies first, then Locations and AssetTypes
+        # fresh file: create Companies (with active flag), Locations, and AssetTypes
         with pd.ExcelWriter(LOOKUPS_PATH, engine='openpyxl') as writer:
-            pd.DataFrame(columns=['company']) .to_excel(writer, sheet_name='Companies', index=False)
-            pd.DataFrame(columns=['location']) .to_excel(writer, sheet_name='Locations', index=False)
-            pd.DataFrame(columns=['asset_type']) .to_excel(writer, sheet_name='AssetTypes', index=False)
+            # Companies: “company” + “active”
+            pd.DataFrame(columns=['company','active']) \
+              .to_excel(writer, sheet_name='Companies', index=False)
+            # Locations: “location” + parent “company”
+            pd.DataFrame(columns=['location','company']) \
+              .to_excel(writer, sheet_name='Locations', index=False)
+            # AssetTypes: “asset_type” + parent “location”
+            pd.DataFrame(columns=['asset_type','location']) \
+              .to_excel(writer, sheet_name='AssetTypes', index=False)
         return
+
 
     # patch missing sheets if needed
     wb = load_workbook(LOOKUPS_PATH)
@@ -126,7 +135,16 @@ def get_locations() -> list[str]:
     return read_lookup_list('Locations')
 
 def add_new_location(new_loc: str) -> bool:
-    return append_to_lookup('Locations', new_loc)
+    added = append_to_lookup('Locations', new_loc)
+    if not added:
+        return False
+    # create a workbook for this location with one sheet per existing asset-type
+    path = os.path.join(LOCATIONS_DIR, f'{new_loc}.xlsx')
+    wb = Workbook()
+    # leave the default sheet in place (blank) for now;
+    # asset-type sheets will be added when Confirm Asset Type is clicked
+    wb.save(path)
+    return True
 
 def get_asset_types() -> list[str]:
     return read_lookup_list('AssetTypes')
@@ -144,38 +162,51 @@ def add_new_asset_type_internal(new_asset_type: str) -> dict:
         if not name:
             return {'success': False, 'message': 'Invalid asset type.'}
 
-        # 1) append to lookup
+        # 1) append to the global lookup sheet (col A)
         added = append_to_lookup('AssetTypes', name)
         if not added:
             return {'success': True, 'added': False, 'message': 'Asset type already exists.'}
 
-        # 2) create per‑province workbook
-        data_path = os.path.join(ASSET_TYPES_DIR, f'{name}.xlsx')
-        wb = Workbook()
-        wb.remove(wb.active)
-
-        provinces = read_lookup_list('Locations')
+        # 2) for each location workbook, safely load (or rebuild & retry) then add the sheet
         core_cols = [
             'Station ID','Asset Type','Site Name',
             'Province','Latitude','Longitude',
             'Status','Repair Ranking'
         ]
+        for loc_file in glob.glob(os.path.join(LOCATIONS_DIR, '*.xlsx')):
+            wb = None
+            # try loading; on any failure, delete & recreate, then reload
+            try:
+                wb = load_workbook(loc_file)
+            except Exception:
+                try:
+                    os.remove(loc_file)
+                except OSError:
+                    pass
+                basename = os.path.splitext(os.path.basename(loc_file))[0]
+                add_new_location(basename)
+                try:
+                    wb = load_workbook(loc_file)
+                except Exception:
+                    # still bad? give up on this file
+                    continue
 
-        for prov in provinces:
-            ws = wb.create_sheet(title=prov)
-            ws.merge_cells('A1:H1')
-            hdr = ws['A1']
-            hdr.value = 'General Information'
-            hdr.alignment = Alignment(horizontal='center', vertical='center')
-            hdr.font = Font(bold=True)
+            # if the sheet already exists, skip it
+            if name in wb.sheetnames:
+                continue
 
+            # otherwise, create the new asset‑type sheet
+            ws = wb.create_sheet(title=name)
+            # if the default 'Sheet' placeholder still exists (and there's >1 sheet), drop it
+            if 'Sheet' in wb.sheetnames and len(wb.sheetnames) > 1:
+                wb.remove(wb['Sheet'])
+
+            # write the header row
             for idx, col in enumerate(core_cols, start=1):
-                c = ws.cell(row=2, column=idx)
-                c.value = col
-                c.font = Font(bold=True)
-                c.alignment = Alignment(horizontal='left', vertical='center')
+                ws.cell(row=2, column=idx, value=col)
+            wb.save(loc_file)
 
-        wb.save(data_path)
+        # 3) done all locations—return success immediately (no exception)
         return {'success': True, 'added': True}
 
 def delete_all_data_files() -> dict:
@@ -196,4 +227,27 @@ def get_companies() -> list[str]:
     return read_lookup_list('Companies')
 
 def add_new_company(new_company: str) -> bool:
-    return append_to_lookup('Companies', new_company)
+    return append_to_lookup('Companies', new_company, new_company)
+
+def update_lookup_parent(sheet_name: str, entry_value: str, parent_value: str) -> bool:
+    """
+    In LOOKUPS_PATH[sheet_name], find the row where col A == entry_value
+    (case‑insensitive), set col B = parent_value, save, return True.
+    If not found, append [entry_value, parent_value].
+    """
+    wb = load_workbook(LOOKUPS_PATH)
+    if sheet_name not in wb.sheetnames:
+        return False
+    ws = wb[sheet_name]
+    target = entry_value.strip().lower()
+    # search rows 2+ in column A
+    for row in ws.iter_rows(min_row=2, max_col=2):
+        a_val = row[0].value
+        if isinstance(a_val, str) and a_val.strip().lower() == target:
+            row[1].value = parent_value
+            wb.save(LOOKUPS_PATH)
+            return True
+    # not found → append new row
+    ws.append([entry_value.strip(), parent_value])
+    wb.save(LOOKUPS_PATH)
+    return True
