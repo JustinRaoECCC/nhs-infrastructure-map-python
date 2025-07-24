@@ -264,25 +264,39 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Station Details                                                          */
+/* Station Details Sections                                                */
 /* ───────────────────────────────────────────────────────────────────────── */
-#station-details p {
-  margin: 0;
+.station-section {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 1em;
+  margin-bottom: 1em;
+  background: #fafafa;
 }
-#station-details table {
+.station-section h3 {
+  margin: 0 0 0.5em;
+  font-size: 1.1em;
+}
+.station-section table {
   width: 100%;
-  border-collapse: collapse;
+  /* allow each cell to have its own border */
+  border-collapse: separate;
+  border-spacing: 0.5em 0.5em;
 }
-#station-details th {
+.station-section th {
   text-align: left;
-  padding: 4px;
-  background: #e8e8e8;
-  width: 40%;
+  vertical-align: middle;
+  width: 35%;
+  padding: 0.3em;
 }
-#station-details td {
-  padding: 4px;
-  border-bottom: 1px solid #ddd;
+.station-section td {
+  padding: 0.3em;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
+
+
 /* ───────────────────────────────────────────────────────────────────────── */
 /* Extra‑Sections styling                                                   */
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -515,4 +529,67 @@ body, html {
   font-size: 1rem;
   margin-right: 0.5em;
   cursor: pointer;
+}
+
+/* Red nuke button in the bottom‑right */
+.data-nuke {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background-color: #dc3545;
+  opacity: 0.5;  
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+.data-nuke:hover {
+  opacity: 8;                  /* fully opaque */
+  background-color: #c82333;   /* a darker red on hover */
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Custom map pin styling                                                 */
+/* ───────────────────────────────────────────────────────────────────────── */
+.marker-dot {
+  width: 12px;
+  height: 12px;
+  display: block;
+  border-radius: 50%;
+  border: 1px solid white;
+  box-shadow: 0 0 3px rgba(0,0,0,0.5);
+  /* color is provided via a CSS variable */
+  background-color: var(--marker-color);
+}
+
+/* ─── Loading overlay ───────────────────────────────────────────────── */
+#loadingOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: none;              /* only when importing */
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.loading-container {
+  width: 60%;
+  max-width: 400px;
+  text-align: center;
+}
+
+#loadingOverlay progress {
+  width: 100%;
+  height: 1rem;
+  background: #ccc;
+}
+
+#importProgressText {
+  margin-top: 0.5rem;
+  color: #fff;
+  font-weight: bold;
 }

@@ -107,7 +107,13 @@ class DBRepo(BaseRepo):
                 # nothing to do, avoid UNIQUE constraint failure
                 return {"success": True, "added": False, "message": "Station already exists"}
 
-            at = s.query(AssetType).filter_by(name=station_obj["assetType"]).one()
+            # ensure the requested asset‑type exists (mimic Excel’s lazy‑create)
+            at = s.query(AssetType).filter_by(name=station_obj["assetType"]).one_or_none()
+            if at is None:
+                at = AssetType(name=station_obj["assetType"])
+                s.add(at)
+                s.flush()    # assign it an ID in this session
+
             st = Station(
                 station_id=sid,
                 name=      station_obj["generalInfo"]["siteName"],
@@ -206,7 +212,7 @@ class DBRepo(BaseRepo):
         with self.Session() as s:
             return s.query(Company).filter_by(name=name).first()
 
-    def add_company(self, name: str):
+    def add_company(self, name: str, active: bool = False):
         with self.Session() as s:
             if s.query(Company).filter_by(name=name).first():
                 return {"success": True, "added": False}

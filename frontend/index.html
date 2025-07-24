@@ -76,6 +76,9 @@
     <!-- Add Infrastructure Button -->
     <button id="btnAddCompany">Add Company</button>
 
+    <!-- Data Nuke: triple‑click within 1s -->
+    <button id="btnDataNuke" class="data-nuke" title="⚠️ Click 3× fast to wipe all data"></button>
+
     <!-- Add‑Infra Modal (unchanged inside) -->
     <div id="addInfraModal" class="modal">
       <div class="modal-content">
@@ -118,6 +121,17 @@
           <button id="btnAddSection" type="button">+ Add Section</button>
           <div id="sectionsForms" style="margin-top:1em;"></div>
         </div>
+
+        <hr style="margin:2em 0 1em"/>
+        <div id="importExcelSection" style="margin-bottom:1em;">
+          <h3>Import from Excel file</h3>
+          <input type="file" id="importExcelFile" accept=".xlsx"/>
+          <select id="importSheetSelect" disabled>
+            <option value="">-- select sheet --</option>
+          </select>
+          <button id="btnImportExcel" disabled>Import</button>
+        </div>
+
         
       </div>
     </div>
@@ -162,6 +176,13 @@
     </div>
   </div>
 
+  <div id="loadingOverlay">
+    <div class="loading-container">
+      <progress id="importProgress" value="0" max="100"></progress>
+      <div id="importProgressText"></div>
+    </div>
+  </div>
+
 
   <!-- Scripts -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -170,5 +191,6 @@
   <script src="js/add_infra.js"></script>
   <script src="js/filters.js"></script>
   <script src="js/map_view.js"></script>
+  <script src="js/data_nuke.js"></script>
 </body>
 </html>

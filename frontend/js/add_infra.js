@@ -50,11 +50,67 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSaveAssetTypeModal = document.getElementById('btnSaveAssetTypeModal');
   const btnConfirmAssetTypeModal = document.getElementById('btnConfirmAssetTypeModal');
   const closeAssetTypeModal = addAssetTypeModal.querySelector('.close-modal');
+  const importExcelFile   = document.getElementById('importExcelFile');
+  const importSheetSelect = document.getElementById('importSheetSelect');
+  const btnImportExcel    = document.getElementById('btnImportExcel');
+
+  const loadingOverlay     = document.getElementById('loadingOverlay');
+  const importProgress     = document.getElementById('importProgress');
+  const importProgressText = document.getElementById('importProgressText');
+
 
   let existingStationIDs = new Set();
   let extraSections = {};
   let selectedCompany = null;
   let selectedLocation = null;
+  let importBase64        = null;
+  let currentSheet = null;
+
+
+  // ─── Sheet‐to‐total mapping & current sheet ─────────────────────────────
+  const sheetTotals = {
+    'cableway AB': 89,
+    'cableway BC': 150,
+    'cableway YT': 33,
+    'weir BC': 27,
+    'metering bridge BC': 17,
+    'linecabin': 23,
+    'non active': 82
+  };
+
+  // Show/hide (guard against bad totals)
+  function showLoading(total) {
+    if (!isFinite(total) || total <= 0) {
+      console.warn('Bad total for loading, defaulting to 1:', total);
+      total = 1;
+    }
+    importProgress.max   = total;
+    importProgress.value = 0;
+    importProgressText.textContent = `0% (0/${total})`;
+    loadingOverlay.style.display = 'flex';
+  }
+  function hideLoading() {
+    loadingOverlay.style.display = 'none';
+  }
+
+  // Eel hooks (Python will call these):
+  eel.expose(initImportProgress);
+  function initImportProgress(pyTotal) {
+    // prefer our mapping, else fall back to Python’s
+    const t = sheetTotals[currentSheet] || pyTotal;
+    showLoading(t);
+  }
+
+  eel.expose(updateImportProgress);
+  function updateImportProgress(count, pyTotal) {
+    // choose mapping or Python value
+    const t = sheetTotals[currentSheet] || pyTotal || importProgress.max;
+    importProgress.max   = isFinite(t) ? t : importProgress.max;
+    importProgress.value = count;
+    const pct = Math.floor((count/importProgress.max)*100);
+    importProgressText.textContent = `${pct}% (${count}/${importProgress.max})`;
+  }
+
 
   // ── Modal open/close ─────────────────────────────────────────────────────────
   function openModal() {
@@ -140,6 +196,64 @@ document.addEventListener('DOMContentLoaded', () => {
       existingStationIDs = new Set();
     }
   }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Excel import UI logic (file + sheet picker)
+ // ───────────────────────────────────────────────────────────────────────────
+  importExcelFile.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const buffer = await file.arrayBuffer();
+   const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let b of bytes) binary += String.fromCharCode(b);
+    importBase64 = btoa(binary);
+
+    // fetch sheet names from Python
+    const sheets = await window.electronAPI.getExcelSheetNames(importBase64);
+    importSheetSelect.innerHTML = '<option value="">-- select sheet --</option>';
+    sheets.forEach(name => {
+      const o = document.createElement('option');
+      o.value = o.textContent = name;
+      importSheetSelect.appendChild(o);
+    });
+    importSheetSelect.disabled = false;
+  });
+
+  importSheetSelect.addEventListener('change', () => {
+    btnImportExcel.disabled = !importSheetSelect.value;
+  });
+
+  btnImportExcel.addEventListener('click', async () => {
+    const sheet = importSheetSelect.value;
+    const location = selectLocation.value;
+    const asset    = selectAssetType.value;
+    if (!importBase64 || !sheet) return;
+
+
+    // remember which sheet and start determinate loader
+    currentSheet = sheet;
+    showLoading(sheetTotals[sheet] || 1);
+    try {
+      const res = await window.electronAPI.importExcelSheet(
+        importBase64, sheet, location, asset
+      );
+      if (!res.success) {
+        alert(`Import failed: ${res.message}`);
+      } else {
+        // on success: close modal + refresh markers
+        closeModal();
+        if (window.refreshMarkers) window.refreshMarkers();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Unexpected error during import');
+    } finally {
+      // hide overlay no matter what
+      hideLoading();
+    }
+  });
+
 
   // ── Save general info, reveal Create & Sections UI ──────────────────────────
   btnSaveGeneralInfo.addEventListener('click', () => {
@@ -249,6 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Gather general info values
     const location  = selectLocation.value;
     const assetType = selectAssetType.value;
+
+
     const stationId = inputStationId.value.trim();
     const siteName  = inputSiteName.value.trim();
     const status    = inputStatus.value.trim() || 'UNKNOWN';
@@ -278,18 +394,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const res = await window.electronAPI.createNewStation(stationObj);
+
       if (!res.success) {
         createStationMessage.textContent = `Error: ${res.message}`;
         return;
       }
       createStationMessage.style.color = 'green';
       createStationMessage.textContent = 'Station created successfully!';
-      // TODO: refresh map/list views here
+      if (window.refreshMarkers) window.refreshMarkers();
       setTimeout(() => closeModal(), 1000);
     } catch (err) {
-      createStationMessage.textContent = `Error: ${err.message}`;
-    }
-  });
+    console.error('[Import] unexpected error', err);
+    alert('Unexpected error during import');
+  } finally {
+    hideLoading();
+  }
+});
 
   // ── Reset modal to initial state ────────────────────────────────────────────
   function resetModal() {
@@ -341,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = inputNewCompany.value.trim();
     if (!name) return;
     // 1) persist into lookups.xlsx (col A of Companies)
-    const res = await window.electronAPI.addNewCompany(name);
+    const res = await window.electronAPI.addNewCompany(name, false);
     if (!res.success) {
       alert(res.message);
       return;
@@ -358,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = selectCompany.value;
     if (name) {
       // now persist and mark active
-      await window.electronAPI.addNewCompany(name);
+      await window.electronAPI.addNewCompany(name, true);
     }
     closeCompanyModalFn();
     buildFilterTree();
@@ -419,7 +539,18 @@ document.addEventListener('DOMContentLoaded', () => {
       await window.electronAPI.addLocationUnderCompany(selectedCompany, loc);
     }
     closeLocationModalFn();
-    buildFilterTree();
+    // ─── append the new location under its company without collapsing the tree ───
+    const compWrap = window.findCompanyWrapper(selectedCompany);
+    if (compWrap) {
+      const newLocWrap = window.createCollapsibleItem(
+        loc,           // the new location name
+        'location',    // type
+        selectedCompany
+      );
+      compWrap.querySelector('.collapsible-content')
+            .appendChild(newLocWrap);
+    }
+
   });
 
   closeLocationModal.addEventListener('click', closeLocationModalFn);
@@ -473,8 +604,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (at) {
       await window.electronAPI.addAssetTypeUnderLocation(at, selectedCompany, selectedLocation);
     }
+
     closeAssetTypeModalFn();
-    buildFilterTree();
+    // ─── append the new asset type under its location without collapsing ─────
+    const compWrap = window.findCompanyWrapper(selectedCompany);
+    const locWrap  = compWrap && window.findLocationWrapper(compWrap, selectedLocation);
+    if (locWrap) {
+      const child = document.createElement('div');
+      child.classList.add('collapsible-child');
+      child.textContent = at;  // the new asset‑type name
+      child.addEventListener('click', () =>
+        window.openAddInfrastructureModal(selectedCompany, selectedLocation, at)
+      );
+      locWrap.querySelector('.collapsible-content').appendChild(child);
+    }
+
   });
   
   closeAssetTypeModal.addEventListener('click', closeAssetTypeModalFn);
@@ -486,8 +630,12 @@ document.addEventListener('DOMContentLoaded', () => {
   window.openLocationModal = openLocationModal;
   window.openAssetTypeModal = openAssetTypeModal;
 
-  window.prefillAndOpenAddInfraModal = function (location, assetType) {
-    // stash the pre‑selected values
+  // When opening from the filter tree, reload lookups first
+  window.prefillAndOpenAddInfraModal = async function (location, assetType) {
+    // 1) repopulate the select boxes so our values exist
+    await loadLookups();
+
+    // 2) stash the pre‑selected values
     selectLocation.value    = location;
     selectAssetType.value   = assetType;
 

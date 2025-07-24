@@ -120,8 +120,8 @@ class DataManager:
             return [c.name for c in self.db.list_companies()]
         return self.excel.get_companies()
 
-    def add_company(self, name):
-        excel_res = self.excel.add_company(name)
+    def add_company(self, name, active: bool = False):
+        excel_res = self.excel.add_company(name, active)
         db_res = self.db.add_company(name)
         return db_res if self.use_db else excel_res
     
@@ -180,7 +180,7 @@ class DataManager:
             headers = [
                 'Station ID','Asset Type','Site Name',
                 'Province','Latitude','Longitude',
-                'Status','Repair Ranking'
+                'Status'
             ]
             for idx, col in enumerate(headers, start=1):
                 ws.cell(row=2, column=idx, value=col)
@@ -212,3 +212,55 @@ class DataManager:
                 "locations": read_lookup_list('Locations'),
                 "asset_types": read_lookup_list('AssetTypes')
             }
+        
+    def import_stations_from_excel(self, location_name: str, sheet_name: str):
+        """
+        Read data/locations/{location_name}.xlsx → sheet_name,
+        build station_obj for each row, and call create_station().
+        """
+        from .lookups_manager import LOCATIONS_DIR
+        import os, openpyxl
+
+        path = os.path.join(LOCATIONS_DIR, f"{location_name}.xlsx")
+        if not os.path.exists(path):
+            return {"success": False, "message": f"No workbook for location '{location_name}'"}
+
+        wb = openpyxl.load_workbook(path, data_only=True)
+        if sheet_name not in wb.sheetnames:
+            return {"success": False, "message": f"Sheet '{sheet_name}' not found"}
+
+        ws = wb[sheet_name]
+        headers = [c.value for c in ws[2]]
+        added = 0
+        for row in ws.iter_rows(min_row=3, values_only=True):
+            if not row or not row[0]:
+                continue
+            rec = dict(zip(headers, row))
+            # map general info
+            gen = {
+                "stationId": str(rec.get("Station ID","")).strip(),
+                "siteName":  rec.get("Site Name",""),
+                "province":  rec.get("Province",""),
+                "latitude":  rec.get("Latitude",0),
+                "longitude": rec.get("Longitude",0),
+                "status":    rec.get("Status","")
+            }
+            # extras = all other columns split on “ – ”
+            extra = {}
+            skip = {"Station ID","Asset Type","Site Name","Province","Latitude","Longitude","Status"}
+            for k,v in rec.items():
+                if k in skip or not k or " – " not in k:
+                    continue
+                sec, fld = k.split(" – ",1)
+                extra.setdefault(sec, {})[fld] = v
+
+            station_obj = {
+                "assetType":     sheet_name,
+                "generalInfo":   gen,
+                "extraSections": extra
+            }
+            # reuse your existing create logic (Excel+DB)
+            self.create_station(station_obj)
+            added += 1
+
+        return {"success": True, "added": added}

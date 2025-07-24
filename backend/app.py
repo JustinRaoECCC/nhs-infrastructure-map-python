@@ -11,7 +11,8 @@ import eel
 
 from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files
 from .data_manager     import DataManager
-
+from .data_nuke import data_nuke
+from .bulk_importer import get_sheet_names, import_sheet_data
 from .repairs_manager import save_repair
 
 # ─── Station file constants ─────────────────────────────────────────────────
@@ -41,10 +42,6 @@ def get_asset_types():
 def add_new_asset_type(new_at):
     return dm.add_asset_type(new_at)
 
-@eel.expose
-def delete_all_data_files_api():
-    return delete_all_data_files_api()
-
 # ─── Station data APIs ──────────────────────────────────────────────────────
 @eel.expose
 def get_infrastructure_data():
@@ -67,8 +64,10 @@ def get_companies():
     return dm.get_companies()
 
 @eel.expose
-def add_new_company(name):
-    return dm.add_company(name)
+def add_new_company(name, active=False):
+    # front‑end will pass active=False for “+ Add”,
+    # then active=True when the user hits Confirm
+    return dm.add_company(name, active)
 
 @eel.expose
 def get_locations_for_company(company_name):
@@ -93,6 +92,16 @@ def add_location_under_company(location_name, company_name):
       window.electronAPI.addLocationUnderCompany(company, location) 
     """
     return dm.add_location_under_company(location_name, company_name)
+
+
+@eel.expose
+def get_excel_sheet_names(base64_data: str):
+    return get_sheet_names(base64_data)
+
+@eel.expose
+def import_excel_sheet(b64, sheet, location, asset_type):
+    return import_sheet_data(b64, sheet, location, asset_type)
+
 
 # ─── App startup ────────────────────────────────────────────────────────────
 def main():

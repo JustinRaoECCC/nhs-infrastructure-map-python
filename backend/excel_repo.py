@@ -54,7 +54,7 @@ class ExcelRepo(BaseRepo):
                         **{k: v for k, v in rec.items() if k not in (
                             'Station ID','Site Name','Province',
                             'Latitude','Longitude','Status',
-                            'Asset Type','Repair Ranking'
+                            'Asset Type'
                         )}
                     }
                     stations.append(station)
@@ -75,7 +75,7 @@ class ExcelRepo(BaseRepo):
             headers = [
                 'Station ID','Asset Type','Site Name',
                 'Province','Latitude','Longitude',
-                'Status','Repair Ranking'
+                'Status'
             ]
             for idx, col in enumerate(headers, start=1):
                 c = ws.cell(row=2, column=idx)
@@ -136,9 +136,10 @@ class ExcelRepo(BaseRepo):
         from .lookups_manager import get_companies as lm_get_companies
         return lm_get_companies()
 
-    def add_company(self, name: str):
+    def add_company(self, name: str, active: bool = False):
         from .lookups_manager import add_new_company as lm_add_company
-        added = lm_add_company(name)
+        # active=False → blank cell; active=True → "TRUE" in column B
+        added = lm_add_company(name, active)
         return {
             "success": True,
             "added": added

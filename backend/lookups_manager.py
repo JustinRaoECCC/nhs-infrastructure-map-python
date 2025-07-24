@@ -121,7 +121,8 @@ def append_to_lookup(sheet_name: str, entry_value: str, second_value: str = None
             return False
 
     if sheet_name == 'Companies':
-        ws.append([val, 'TRUE' if second_value else 'FALSE'])
+        # second_value now is the exact string we want in column B ("" or "TRUE")
+        ws.append([val, second_value])
     elif sheet_name == 'Locations' or sheet_name == 'AssetTypes':
         ws.append([val, second_value or ''])
     else:
@@ -171,7 +172,7 @@ def add_new_asset_type_internal(new_asset_type: str) -> dict:
         core_cols = [
             'Station ID','Asset Type','Site Name',
             'Province','Latitude','Longitude',
-            'Status','Repair Ranking'
+            'Status'
         ]
         for loc_file in glob.glob(os.path.join(LOCATIONS_DIR, '*.xlsx')):
             wb = None
@@ -226,8 +227,10 @@ def delete_all_data_files() -> dict:
 def get_companies() -> list[str]:
     return read_lookup_list('Companies')
 
-def add_new_company(new_company: str) -> bool:
-    return append_to_lookup('Companies', new_company, new_company)
+def add_new_company(name: str, active: bool = False) -> bool:
+    # active=False → blank; active=True → "TRUE"
+    flag = "TRUE" if active else ""
+    return append_to_lookup('Companies', name, flag)
 
 def update_lookup_parent(sheet_name: str, entry_value: str, parent_value: str) -> bool:
     """
