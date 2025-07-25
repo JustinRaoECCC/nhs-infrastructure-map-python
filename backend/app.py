@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 import eel
 
-from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files
+from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files, get_asset_type_color
 from .data_manager     import DataManager
 from .data_nuke import data_nuke
 from .bulk_importer import get_sheet_names, import_sheet_data
@@ -45,7 +45,13 @@ def add_new_asset_type(new_at):
 # ─── Station data APIs ──────────────────────────────────────────────────────
 @eel.expose
 def get_infrastructure_data():
-    return dm.list_stations()
+    stations = dm.list_stations()
+    # inject the saved color per province→asset_type
+    for stn in stations:
+        col = get_asset_type_color(stn['province'], stn['asset_type'])
+        stn['color'] = col or '#000000'   # fallback if something went wrong
+    return stations
+
 
 @eel.expose
 def create_new_station(station_obj: dict):

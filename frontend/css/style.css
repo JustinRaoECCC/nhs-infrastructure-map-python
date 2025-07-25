@@ -547,7 +547,7 @@ body, html {
   cursor: pointer;
 }
 .data-nuke:hover {
-  opacity: 8;                  /* fully opaque */
+  opacity: 1;                  /* fully opaque */
   background-color: #c82333;   /* a darker red on hover */
 }
 
@@ -592,4 +592,15 @@ body, html {
   margin-top: 0.5rem;
   color: #fff;
   font-weight: bold;
+}
+
+.popup-link {
+  color: blue;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.leaflet-popup-content a.popup-link {
+  color: blue !important;
+  text-decoration: underline !important;
 }

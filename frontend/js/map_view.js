@@ -2,20 +2,23 @@
 // Initializes the Leaflet map, loads station data, places markers, and handles station‑details popups.
 
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Colour bank + assignment for each location→asset‑type
-// ─────────────────────────────────────────────────────────────────────────────
-const colourMap = new Map();
-
-// Random hex‑colour generator
-function getRandomColor() {
-  return '#' +
-    Math.floor(Math.random() * 0xFFFFFF)
-      .toString(16)
-      .padStart(6, '0');
+// ─── Data fetch helper ──────────────────────────────────────────────────────
+/**
+ * Fetch station data from the Python backend via Eel.
+ */
+async function fetchInfrastructureData() {
+  return await eel.get_infrastructure_data()();
 }
 
+window.addEventListener('pageshow', event => {
+  // only when Chrome/Firefox restores from its back‑forward cache…
+  if (event.persisted) {
+    window.refreshMarkers();
+    if (typeof window.buildFilterTree === 'function') {
+      window.buildFilterTree();
+    }
+  }
+});
 
 
 // Initialize Leaflet map
@@ -41,25 +44,30 @@ window.refreshMarkers = function() {
   markersLayer.clearLayers();
 
   fetchInfrastructureData().then(data => {
-    
     data.forEach(stn => {
-      // pick colour per location→assetType (reuse your existing logic)
-      const key = `${stn.province}:${stn.asset_type}`;
-      if (!colourMap.has(key)) {
-        colourMap.set(key, getRandomColor());
-      }
-      const color = colourMap.get(key);
+      const color = stn.color;
 
+      // build marker + popup link
       const marker = L.marker([stn.lat, stn.lon], {
         icon: createColoredIcon(color)
       })
-      .bindPopup(`<strong>${stn.name}</strong>`)
-      .on('click', () => {
+        .addTo(map)
+        .bindPopup(
+          // give the <a> a class so CSS can style it globally
+          `<a href="station.html?id=${stn.station_id}" class="popup-link">
+              ${stn.name}
+          </a>`
+        );
+
+      // icon clicks open RHS view; clicks on the link itself only navigate
+      marker.on('click', (e) => {
+        if (e.originalEvent && e.originalEvent.target.tagName === 'A') {
+          // let the <a> do its default navigation
+          return;
+        }
         marker.openPopup();
         showStationDetails(stn);
       });
-
-      markersLayer.addLayer(marker);
     });
   });
 };
@@ -128,25 +136,3 @@ function createColoredIcon(color) {
     iconAnchor: [6, 6],
   });
 }
-
-
-// Load and display markers
-fetchInfrastructureData().then(data => {
-  data.forEach(stn => {
-    // pick a unique colour per “location→assetType”
-    const key = `${stn.province}:${stn.asset_type}`;
-    if (!colourMap.has(key)) {
-      colourMap.set(key, getRandomColor());
-    }
-    const color = colourMap.get(key);
-    const marker = L.marker([stn.lat, stn.lon], {
-      icon: createColoredIcon(color)
-    })
-      .addTo(map)
-      .bindPopup(`<strong>${stn.name}</strong>`);
-    marker.on('click', () => {
-      marker.openPopup();
-      showStationDetails(stn);
-    });
-  });
-});

@@ -1,0 +1,57 @@
+<!-- station.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Station Details</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+  <!-- Back button -->
+  <button id="backButton">&larr; Back to Map</button>
+
+  <!-- Station title -->
+  <h1 id="stationTitle"></h1>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-target="overview">Overview</button>
+    <button class="tab" data-target="inspection-history">Inspection History</button>
+    <button class="tab" data-target="construction-history">Construction History</button>
+    <button class="tab" data-target="high-priority-repairs">High Priority Repairs</button>
+    <button class="tab" data-target="documents">Documents</button>
+    <button class="tab" data-target="photos">Photos</button>
+  </div>
+
+  <!-- Overview pane (default visible) -->
+  <div id="overview" class="tab-content">
+    <button id="unlockEditing">🔒 Unlock Editing</button>
+    <div class="station-section">
+      <h3>General Information</h3>
+      <table>
+        <tr><th>Station ID:</th><td id="giStationId"></td></tr>
+        <tr><th>Category:</th><td id="giCategory"></td></tr>
+        <tr><th>Site Name:</th><td id="giSiteName"></td></tr>
+        <tr><th>Province:</th><td id="giProvince"></td></tr>
+        <tr><th>Latitude:</th><td id="giLatitude"></td></tr>
+        <tr><th>Longitude:</th><td id="giLongitude"></td></tr>
+        <tr><th>Status:</th><td id="giStatus"></td></tr>
+      </table>
+    </div>
+    <button id="btnAddSectionOverview" class="btnAddField">+ Add Section</button>
+    <div id="extraSectionsOverview"></div>
+  </div>
+
+  <!-- Other tabs (empty placeholders) -->
+  <div id="inspection-history" class="tab-content" style="display:none;"></div>
+  <div id="construction-history" class="tab-content" style="display:none;"></div>
+  <div id="high-priority-repairs" class="tab-content" style="display:none;"></div>
+  <div id="documents" class="tab-content" style="display:none;"></div>
+  <div id="photos" class="tab-content" style="display:none;"></div>
+
+  <!-- Eel runtime + page logic -->
+  <script type="text/javascript" src="/eel.js"></script>
+  <script src="js/station.js"></script>
+</body>
+</html>

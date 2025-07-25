@@ -137,7 +137,7 @@ class DataManager:
             return []
         ws = wb['Locations']
         result = []
-        for loc, comp in ws.iter_rows(min_row=2, values_only=True):
+        for loc, comp in ws.iter_rows(min_row=2, max_col=2, values_only=True):
             if isinstance(loc, str) and comp == company_name:
                 result.append(loc)
         return result

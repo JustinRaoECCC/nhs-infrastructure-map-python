@@ -4,6 +4,7 @@
 import os
 import glob
 import threading
+import random
 
 import pandas as pd
 from openpyxl import load_workbook, Workbook
@@ -15,6 +16,12 @@ DATA_DIR = os.path.abspath(os.path.join(HERE, '..', 'data'))
 ASSET_TYPES_DIR = os.path.join(DATA_DIR, 'asset_types')
 LOOKUPS_PATH = os.path.join(DATA_DIR, 'lookups.xlsx')
 LOCATIONS_DIR   = os.path.join(DATA_DIR, 'locations')
+
+# Random color generator
+def _get_random_color() -> str:
+    """Return a random hex colour string, e.g. '#3fa4c2'."""
+    return '#{:06x}'.format(random.randint(0, 0xFFFFFF))
+
 
 # ─── Per‑asset‑type locks ────────────────────────────────────────────────────
 _lock_dict = {}
@@ -152,10 +159,9 @@ def get_asset_types() -> list[str]:
 
 def add_new_asset_type_internal(new_asset_type: str) -> dict:
     """
-    Append to 'AssetTypes' (skipping if exists), then
-    build {DATA_DIR}/{asset_type}.xlsx with one sheet per province,
-    merged header row + core columns.
-    Returns dict(success:bool, added:bool, message:str?).
+    In LOOKUPS_PATH[sheet_name], ensure row where Col A == asset_type.
+    If missing, append [asset_type, <whatever B was>, <random color>] and save.
+    Return the hex color string in Col C.
     """
     lock = _get_lock(new_asset_type)
     with lock:
@@ -243,14 +249,36 @@ def update_lookup_parent(sheet_name: str, entry_value: str, parent_value: str) -
         return False
     ws = wb[sheet_name]
     target = entry_value.strip().lower()
-    # search rows 2+ in column A
-    for row in ws.iter_rows(min_row=2, max_col=2):
-        a_val = row[0].value
-        if isinstance(a_val, str) and a_val.strip().lower() == target:
+    # search rows 2+ in columns A–C (if present)
+    for row in ws.iter_rows(min_row=2, max_col=3):
+        val = row[0].value
+        if isinstance(val, str) and val.strip().lower() == entry_value.strip().lower():
+            # existing entry: update parent in Col B
             row[1].value = parent_value
             wb.save(LOOKUPS_PATH)
             return True
-    # not found → append new row
-    ws.append([entry_value.strip(), parent_value])
+
+    # not found → build new row: [entry, parent, (color if sheet has 3 cols)]
+    new_row = [entry_value.strip(), parent_value]
+    # if this sheet already has 3 columns (i.e. a color column), generate one
+    if ws.max_column >= 3:
+        new_row.append(_get_random_color())
+    ws.append(new_row)
     wb.save(LOOKUPS_PATH)
     return True
+
+
+def get_asset_type_color(sheet_name: str, asset_type: str) -> str | None:
+    """
+    Read LOOKUPS_PATH[sheet_name] for asset_type in Col A,
+    return the hex color in Col C (or None if missing sheet/row).
+    """
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if sheet_name not in wb.sheetnames:
+        return None
+    ws = wb[sheet_name]
+    for row in ws.iter_rows(min_row=2, max_col=3):
+        val = row[0].value
+        if isinstance(val, str) and val.strip().lower() == asset_type.strip().lower():
+            return row[2].value
+    return None
