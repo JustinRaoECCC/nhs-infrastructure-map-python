@@ -11,7 +11,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('backButton')
-    .addEventListener('click', () => window.history.back());
+    .addEventListener('click', () => {
+      // Force a normal navigation (no bfcache)
+      window.location.href = 'index.html';
+    });
 
   // 3) tab switching
   document.querySelectorAll('.tab').forEach(tab => {

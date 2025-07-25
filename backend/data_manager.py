@@ -71,8 +71,9 @@ class DataManager:
 
     # ─── Stations ─────────────────────────────────────────────────────────────
     def list_stations(self):
-        self._migrate_stations()
+        # If you're in SQL mode, first migrate and then read from the DB
         if self.use_db:
+            self._migrate_stations()
             out = []
             for s in self.db.list_stations():
                 rec = {
@@ -84,15 +85,14 @@ class DataManager:
                     "status":     s.status,
                     "asset_type": s.asset_type.name,
                 }
-                # flatten JSON extra_data into the same column format
                 extra = s.extra_data or {}
                 for section_name, fields in extra.items():
                     for field_name, field_value in fields.items():
-                        key = f"{section_name} – {field_name}"
-                        rec[key] = field_value
+                        rec[f"{section_name} – {field_name}"] = field_value
                 out.append(rec)
             return out
-        # ExcelRepo already returns flattened extra‐columns
+
+        # Excel‑only mode: skip any SQL migration and just return the flat rows
         return self.excel.list_stations()
 
     def create_station(self, station_obj: dict):

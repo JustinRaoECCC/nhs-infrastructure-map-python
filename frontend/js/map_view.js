@@ -1,6 +1,7 @@
 // map_view.js
 // Initializes the Leaflet map, loads station data, places markers, and handles station‑details popups.
 
+window.addEventListener('unload', () => {});
 
 // ─── Data fetch helper ──────────────────────────────────────────────────────
 /**
@@ -11,13 +12,39 @@ async function fetchInfrastructureData() {
 }
 
 window.addEventListener('pageshow', event => {
-  // only when Chrome/Firefox restores from its back‑forward cache…
   if (event.persisted) {
-    window.refreshMarkers();
-    if (typeof window.buildFilterTree === 'function') {
-      window.buildFilterTree();
-    }
+    console.log('🔄 Restored from bfcache – reloading to re-open eel socket');
+    window.location.reload();
   }
+});
+
+
+// ─── Re‑init on back/forward cache *or* when the window regains focus ────
+function reinitMapAndFilters() {
+  console.log('🔄 [map_view] reinitMapAndFilters()');
+  // clear and redraw markers
+  markersLayer.clearLayers();
+  window.refreshMarkers();
+  // clear and rebuild filters (filters.js’s buildFilterTree already does the clear)
+  if (typeof window.buildFilterTree === 'function') {
+    console.log('🔄 [map_view] rebuild filter tree');
+    window.buildFilterTree();
+  }
+}
+
+// when Chrome/Firefox restores from the bfcache…
+window.addEventListener('pageshow', event => {
+  console.log(`📡 [map_view] pageshow fired; persisted=${event.persisted}`);
+  if (event.persisted) {
+    reinitMapAndFilters();
+  }
+});
+
+
+// also whenever the user’s focus returns here (e.g. via history.back, tab switch, etc.)
+window.addEventListener('focus', () => {
+  console.log('👀 [map_view] window focus fired');
+  reinitMapAndFilters();
 });
 
 
@@ -73,6 +100,7 @@ window.refreshMarkers = function() {
 };
 
 // initial population
+console.log('🔷 [map_view] initial refreshMarkers()')
 window.refreshMarkers();
 
 
