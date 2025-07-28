@@ -1,16 +1,65 @@
-<div id="dashboardContainer">
-  <div class="dashboard-tabs" style="margin-bottom:1em;">
-    <button class="dashboard-tab active" data-target="parameters">Parameters</button>
-    <button class="dashboard-tab"       data-target="workplan">Workplan</button>
-    <button class="dashboard-tab"       data-target="optimization">Optimization</button>
-  </div>
-  <div id="parameters"    class="dashboard-content active">
-    <!-- blank for now -->
-  </div>
-  <div id="workplan"      class="dashboard-content">
-    <!-- blank for now -->
-  </div>
-  <div id="optimization"  class="dashboard-content">
-    <!-- blank for now -->
-  </div>
-</div>
+  <div id="dashboardContainer">
+    <div class="dashboard-tabs">
+      <button class="dashboard-tab active" data-target="parameters">Parameters</button>
+      <button class="dashboard-tab" data-target="workplan">Workplan</button>
+      <button class="dashboard-tab" data-target="optimization">Optimization</button>
+    </div>
+
+    <!-- 1) Interactive Parameters editor -->
+    <div id="parameters" class="dashboard-content active">
+      <div class="top-pane">
+        <div id="paramContainer"></div>
+        <button id="addParamBtn">+ Add Parameter</button>
+        <button id="saveParamsBtn">💾 Save Changes</button>
+      </div>
+
+      <hr class="separator"/>
+
+      <div class="bottom-pane">
+        <!-- stats summary -->
+        <div id="paramStats"></div>
+        <!-- new parameters will be appended here -->
+        <div id="paramList"></div>
+      </div>
+
+    </div>
+
+    <!-- 2) Workplan -->
+    <div id="workplan" class="dashboard-content">
+      <!-- top half: existing controls -->
+      <div class="top-pane">
+        <div id="workplanContainer">
+          <div class="wp-row">
+            <label>Yearly Budget</label>
+            <input type="text" class="wp-value" data-key="Yearly Budget" />
+          </div>
+          <div class="wp-row">
+            <label>O&amp;M Current Split</label>
+            <input type="text" class="wp-value" data-key="O&M Current Split" />
+          </div>
+          <button id="saveWorkplanBtn">💾 Save Changes</button>
+        </div>
+      </div>
+
+      <hr class="separator" />
+
+      <!-- bottom half: dynamic table -->
+      <div class="bottom-pane">
+        <table id="workplanTable">
+          <thead>
+            <tr id="workplanHeaders"></tr>
+          </thead>
+          <tbody id="workplanBody">
+            <!-- rows will go here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- 3) Optimization -->
+    <div id="optimization" class="dashboard-content">
+      <div class="opt-container">
+        <button id="optimizeBtn">Optimize Workplan</button>
+      </div>
+    </div>

@@ -72,6 +72,13 @@ window.refreshMarkers = function() {
 
   fetchInfrastructureData().then(data => {
     data.forEach(stn => {
+
+      // only show if both its province (location) and asset_type are checked
+      if (!window.filterState.locations[stn.province] ||
+          !window.filterState.asset_types[stn.asset_type]) {
+        return;
+      }
+
       const color = stn.color;
 
       // build marker + popup link

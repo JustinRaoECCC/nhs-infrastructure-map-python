@@ -604,4 +604,150 @@ body, html {
   color: blue !important;
   text-decoration: underline !important;
 }
+/* ─── Full Dashboard Layout ───────────────────────────────────────────────── */
+#dashboardContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 
+/* ─── Tabs ───────────────────────────────────────────────────────────────── */
+.dashboard-tabs {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 0;
+}
+.dashboard-tab {
+  padding: 0.5em 1em;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-size: 1rem;
+}
+.dashboard-tab.active {
+  border-bottom: 3px solid #007acc;
+  font-weight: bold;
+}
+
+/* ─── Panels: hide all but the active one ─────────────────────────────────── */
+.dashboard-content {
+  display: none;
+}
+.dashboard-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+/* ─── Parameter‑row Styling ───────────────────────────────────────────────── */
+#paramContainer .param-row {
+  display: flex;
+  gap: 0.5em;
+  margin-bottom: 0.5em;
+  align-items: center;
+}
+.param-name {
+  flex: 2;
+  padding: 0.25em;
+}
+.param-weight {
+  flex: 1;
+  padding: 0.25em;
+}
+.deleteParamBtn {
+  background: none;
+  border: none;
+  color: red;
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+}
+#addParamBtn,
+#saveParamsBtn {
+  margin-top: 0.5em;
+  margin-right: 0.5em;
+}
+
+/* ─── Parameters Panel: midpoint split & scrollable halves ──────────────── */
+#parameters.dashboard-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;  /* allow children to shrink/grow */
+}
+#parameters.dashboard-content.active > .top-pane {
+  flex: 0 0 50%;
+  overflow-y: auto;
+}
+#parameters.dashboard-content.active > .separator {
+  flex: 0 0 auto;
+  margin: 0;
+  border: none;
+  border-top: 1px solid #ddd;
+  width: 100%;
+}
+#parameters.dashboard-content.active > .bottom-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background-color: #dbdbdb; /* grey only here */
+  padding: 1em;
+  border: none;
+  position: relative
+}
+
+/* ─── Optimization Tab: center Optimizer button ─────────────────────────── */
+#optimization.dashboard-content.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#optimization .opt-container {
+  text-align: center;
+}
+#optimizeBtn {
+  padding: 0.75em 1.5em;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+/* ─── Workplan Panel: midpoint split & scrollable halves ───────────────── */
+#workplan.dashboard-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+#workplan.dashboard-content.active > .top-pane {
+  flex: 0 0 50%;
+  overflow-y: auto;
+}
+#workplan.dashboard-content.active > .separator {
+  flex: 0 0 auto;
+  margin: 0;
+  border: none;
+  border-top: 1px solid #ddd;
+  width: 100%;
+}
+#workplan.dashboard-content.active > .bottom-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1em;
+}
+#workplanTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+#workplanTable th,
+#workplanTable td {
+  border: 1px solid #ccc;
+  padding: 0.5em;
+  text-align: left;
+}
+
+.filter-checkbox {
+  margin-left: 0.5em;
+  cursor: pointer;
+}

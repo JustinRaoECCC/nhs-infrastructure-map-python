@@ -282,3 +282,106 @@ def get_asset_type_color(sheet_name: str, asset_type: str) -> str | None:
         if isinstance(val, str) and val.strip().lower() == asset_type.strip().lower():
             return row[2].value
     return None
+
+# ─── Algorithm Parameters (4th sheet) ────────────────────────────────────
+def read_algorithm_parameters() -> list[dict]:
+    """
+    Ensure the 'Algorithm Parameters' sheet exists, then return all rows
+    as dicts [{'parameter': str, 'weight': int}, …].
+    """
+    from openpyxl import load_workbook
+    import pandas as pd
+
+    # Create sheet if missing
+    if not os.path.exists(LOOKUPS_PATH):
+        ensure_lookups_file()
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if 'Algorithm Parameters' not in wb.sheetnames:
+        # create blank sheet with proper header
+        with pd.ExcelWriter(LOOKUPS_PATH, engine='openpyxl', mode='a') as writer:
+            pd.DataFrame(columns=['Parameter','Weight']) \
+              .to_excel(writer, sheet_name='Algorithm Parameters', index=False)
+        wb = load_workbook(LOOKUPS_PATH, data_only=True)
+
+    ws = wb['Algorithm Parameters']
+    result = []
+    for param, weight in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+        if param is None:
+            continue
+        result.append({
+            'parameter': str(param),
+            'weight': int(weight) if weight is not None else None
+        })
+    return result
+
+def write_algorithm_parameters(params: list[dict]) -> dict:
+    """
+    Overwrite the 'Algorithm Parameters' sheet with the given list
+    of {'parameter':…, 'weight':…}.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(LOOKUPS_PATH)
+    # remove old sheet if exists
+    if 'Algorithm Parameters' in wb.sheetnames:
+        ws_old = wb['Algorithm Parameters']
+        wb.remove(ws_old)
+    # create new
+    ws = wb.create_sheet('Algorithm Parameters')
+    # write header
+    ws.append(['Parameter', 'Weight'])
+    # write rows
+    for entry in params:
+        ws.append([entry.get('parameter',''), entry.get('weight','')])
+    wb.save(LOOKUPS_PATH)
+    return {'success': True}
+
+# ─── Workplan Details (5th sheet) ────────────────────────────────────────────
+def read_workplan_details() -> list[dict]:
+    """
+    Ensure 'Workplan Details' sheet exists, then return rows:
+    [{'parameter': str, 'value': any}, ...].
+    """
+    from openpyxl import load_workbook
+    import pandas as pd
+
+    # Guarantee lookup file
+    ensure_lookups_file()
+
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if 'Workplan Details' not in wb.sheetnames:
+        # create blank sheet with header
+        with pd.ExcelWriter(LOOKUPS_PATH, engine='openpyxl', mode='a') as writer:
+            pd.DataFrame(columns=['Parameter','Value']) \
+              .to_excel(writer, sheet_name='Workplan Details', index=False)
+        wb = load_workbook(LOOKUPS_PATH, data_only=True)
+
+    ws = wb['Workplan Details']
+    result = []
+    for param, val in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+        if param is None:
+            continue
+        result.append({
+            'parameter': str(param),
+            'value': val
+        })
+    return result
+
+def write_workplan_details(entries: list[dict]) -> dict:
+    """
+    Overwrite the 'Workplan Details' sheet with entries list.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(LOOKUPS_PATH)
+    # remove old sheet if present
+    if 'Workplan Details' in wb.sheetnames:
+        wb.remove(wb['Workplan Details'])
+    ws = wb.create_sheet('Workplan Details')
+    # write header
+    ws.append(['Parameter','Value'])
+    # write each row
+    for e in entries:
+        ws.append([e.get('parameter',''), e.get('value','')])
+    wb.save(LOOKUPS_PATH)
+    return {'success': True}

@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 import eel
 
-from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files, get_asset_type_color
+from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files, get_asset_type_color, read_algorithm_parameters, write_algorithm_parameters, read_workplan_details, write_workplan_details
 from .data_manager     import DataManager
 from .data_nuke import data_nuke
 from .bulk_importer import get_sheet_names, import_sheet_data
@@ -41,6 +41,19 @@ def get_asset_types():
 @eel.expose
 def add_new_asset_type(new_at):
     return dm.add_asset_type(new_at)
+
+@eel.expose
+def get_algorithm_parameters():
+    """Return saved algorithm parameters from lookups.xlsx"""
+    return read_algorithm_parameters()
+
+@eel.expose
+def save_algorithm_parameters(params):
+    """
+    params: list of {parameter: str, weight: int}
+    """
+    return write_algorithm_parameters(params)
+
 
 # ─── Station data APIs ──────────────────────────────────────────────────────
 @eel.expose
@@ -107,6 +120,18 @@ def get_excel_sheet_names(base64_data: str):
 @eel.expose
 def import_excel_sheet(b64, sheet, location, asset_type):
     return import_sheet_data(b64, sheet, location, asset_type)
+
+@eel.expose
+def get_workplan_details():
+    """Return saved workplan entries from lookups.xlsx."""
+    return read_workplan_details()
+
+@eel.expose
+def save_workplan_details(entries):
+    """
+    entries: list of {parameter: str, value: any}
+    """
+    return write_workplan_details(entries)
 
 
 # ─── App startup ────────────────────────────────────────────────────────────
