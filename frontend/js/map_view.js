@@ -79,12 +79,11 @@ window.refreshMarkers = function() {
         icon: createColoredIcon(color)
       })
         .addTo(map)
-        .bindPopup(
-          // give the <a> a class so CSS can style it globally
-          `<a href="station.html?id=${stn.station_id}" class="popup-link">
-              ${stn.name}
-          </a>`
-        );
+      .bindPopup(
+        `<a href="#" class="popup-link" data-id="${stn.station_id}">
+            ${stn.name}
+        </a>`
+      );
 
       // icon clicks open RHS view; clicks on the link itself only navigate
       marker.on('click', (e) => {

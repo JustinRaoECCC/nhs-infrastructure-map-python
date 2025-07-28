@@ -1,17 +1,6 @@
-<!-- station.html -->
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Station Details</title>
-  <link rel="stylesheet" href="css/style.css"/>
-</head>
-<body>
-  <!-- Back button -->
+<!-- frontend/station_snippet.html -->
+<div id="stationPage">
   <button id="backButton">&larr; Back to Map</button>
-
-  <!-- Station title -->
   <h1 id="stationTitle"></h1>
 
   <!-- Tabs -->
@@ -24,8 +13,8 @@
     <button class="tab" data-target="photos">Photos</button>
   </div>
 
-  <!-- Overview pane (default visible) -->
-  <div id="overview" class="tab-content">
+  <!-- Tab contents -->
+  <div id="overview" class="tab-content active">
     <button id="unlockEditing">🔒 Unlock Editing</button>
     <div class="station-section">
       <h3>General Information</h3>
@@ -42,16 +31,9 @@
     <button id="btnAddSectionOverview" class="btnAddField">+ Add Section</button>
     <div id="extraSectionsOverview"></div>
   </div>
-
-  <!-- Other tabs (empty placeholders) -->
   <div id="inspection-history" class="tab-content" style="display:none;"></div>
   <div id="construction-history" class="tab-content" style="display:none;"></div>
   <div id="high-priority-repairs" class="tab-content" style="display:none;"></div>
   <div id="documents" class="tab-content" style="display:none;"></div>
   <div id="photos" class="tab-content" style="display:none;"></div>
-
-  <!-- Eel runtime + page logic -->
-  <script type="text/javascript" src="/eel.js"></script>
-  <script src="js/station.js"></script>
-</body>
-</html>
+</div>

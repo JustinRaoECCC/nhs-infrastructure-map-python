@@ -1,40 +1,52 @@
 // frontend/js/station.js
 
-// Load the station details and wire up tabs/back
-document.addEventListener('DOMContentLoaded', async () => {
-  // 1) get ?id=station_id
-  const params   = new URLSearchParams(window.location.search);
-  const stationId = params.get('id');
+/**
+ * Render the station‐details snippet into the page.
+ * @param {string} stationId
+ */
+async function loadStationPage(stationId) {
   if (!stationId) {
     alert('No station specified.');
     return;
   }
 
+  // Wire up “Back to Map”
   document.getElementById('backButton')
     .addEventListener('click', () => {
-      // Force a normal navigation (no bfcache)
-      window.location.href = 'index.html';
+      document.getElementById('stationContentContainer').style.display = 'none';
+      document.getElementById('mapContainer').style.display = '';
+      document.getElementById('rightPanel').style.display = '';
     });
 
-  // 3) tab switching
+  // Tabs
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab, .tab-content')
-        .forEach(el => el.classList.remove('active'));
+              .forEach(el => el.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(tab.dataset.target).classList.add('active');
     });
   });
 
-  // 4) fetch data & find our station
+  // Fetch and populate
+  // — clear out any old station data immediately —
+  document.getElementById('stationTitle').textContent      = '';
+  document.getElementById('giStationId').textContent       = '';
+  document.getElementById('giCategory').textContent        = '';
+  document.getElementById('giSiteName').textContent        = '';
+  document.getElementById('giProvince').textContent        = '';
+  document.getElementById('giLatitude').textContent        = '';
+  document.getElementById('giLongitude').textContent       = '';
+  document.getElementById('giStatus').textContent          = '';
+  document.getElementById('extraSectionsOverview').innerHTML = '';
+
+  // Now fetch and populate
   const data = await eel.get_infrastructure_data()();
   const stn  = data.find(s => s.station_id === stationId);
   if (!stn) {
     alert(`Station "${stationId}" not found.`);
     return;
   }
-
-  // 5) populate Overview fields
   document.getElementById('stationTitle').textContent = stn.name;
   document.getElementById('giStationId').textContent  = stn.station_id;
   document.getElementById('giCategory').textContent   = stn.asset_type;
@@ -43,6 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('giLatitude').textContent   = stn.lat;
   document.getElementById('giLongitude').textContent  = stn.lon;
   document.getElementById('giStatus').textContent     = stn.status;
+}
 
-  // (unlockEditing and add‑section come later)
-});
+// Expose for the view‐switcher
+window.loadStationPage = loadStationPage;

@@ -25,7 +25,7 @@
             <div class="dropdown-content">
               <a href="#" id="btn-map-view">Map View</a>
               <a href="#" id="btn-list-view">List View</a>
-              <a href="#" id="btn-priority-view">Priority View</a>
+              <a href="#" id="btn-dashboard-view">Dashboard View</a>
             </div>
           </div>
 
@@ -59,17 +59,23 @@
         </aside>
 
         <!-- Map -->
-        <div class="map-container">
+        <div class="map-container" id="mapContainer">
           <div id="map"></div>
         </div>
 
         <!-- Right Details Panel -->
-        <aside class="right-panel">
+        <aside class="right-panel" id="rightPanel">
           <h2>Station Details</h2>
           <div id="station-details">
             <p><em>Click a pin to see details</em></p>
           </div>
         </aside>
+      
+        <!-- Dashboard placeholder (initially hidden) -->
+        <div id="dashboardContentContainer" style="display:none; flex:1; padding:1em; overflow:auto;"></div>
+        <!-- Station placeholder (hidden until you click a station) -->
+        <div id="stationContentContainer" style="display:none; flex:2; padding:1em; overflow:auto;"></div>
+
       </div>
     </div>
 
@@ -192,5 +198,7 @@
   <script src="js/filters.js"></script>
   <script src="js/map_view.js"></script>
   <script src="js/data_nuke.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/station.js"></script>
 </body>
 </html>
