@@ -57,9 +57,40 @@ const map = L.map('map', {
   }).setView([54.5, -119], 5);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+  attribution: '&copy; OpenStreetMap contributors',
+  noWrap: true    // ← prevent horizontal repetition
 }).addTo(map);
 
+// ─── Grey out the “un‐scrollable” area in light grey ─────────────────────────
+{
+  const bounds = map.options.maxBounds;
+  const sw     = bounds.getSouthWest();
+  const ne     = bounds.getNorthEast();
+
+  // huge outer ring, covers everything
+  const outer = [
+    [-90, -360],
+    [ 90, -360],
+    [ 90,  360],
+    [-90,  360]
+  ];
+
+  // inner hole = your actual map bounds
+  const inner = [
+    [ sw.lat,  sw.lng ],
+    [ sw.lat,  ne.lng ],
+    [ ne.lat,  ne.lng ],
+    [ ne.lat,  sw.lng ]
+  ];
+
+  L.polygon([ outer, inner ], {
+    fillRule:    'evenodd',
+    fillColor:   '#DDD',   // ← light grey
+    fillOpacity: 1.0,      // ← fully opaque
+    stroke:      false,
+    interactive: false
+  }).addTo(map);
+}
 
 // ─── Marker layer + refresh fn ─────────────────────────────────────────────
 const markersLayer = L.layerGroup().addTo(map);

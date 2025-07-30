@@ -138,7 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function buildDropdown(sel, items) {
     sel.innerHTML = `<option value="">-- select --</option>`;
-    items.forEach(i => {
+    // remove duplicatess
+    Array.from(new Set(items)).forEach(i => {
       const o = document.createElement('option');
       o.value = o.textContent = i;
       sel.appendChild(o);
@@ -150,10 +151,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const v = inputNewLocation.value.trim();
     if (!v) return;
     const res = await window.electronAPI.addNewLocation(v);
+    // only reload/select if we actually added a new one
     if (res.success) {
       await loadLookups();
       selectLocation.value = v;
+      selectLocation.dispatchEvent(new Event('change'));
       inputNewLocation.value = '';
+    } else if (!res.added) {
+      // already existed, do nothing
     } else {
       alert(res.message);
     }
@@ -462,15 +467,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name) return;
     // 1) persist into lookups.xlsx (col A of Companies)
     const res = await window.electronAPI.addNewCompany(name, false);
-    if (!res.success) {
-      alert(res.message);
-      return;
+    // only reload + select if a brand‑new company was actually added
+    if (res.success) {
+      await loadCompanies();
+      selectCompany.value = name;
+      inputNewCompany.value = '';
     }
-    // 2) reload full company list from lookup file
-    await loadCompanies();
-    // 3) select the newly added company
-    selectCompany.value = name;
-    inputNewCompany.value = '';
   });
 
 
@@ -521,15 +523,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name) return;
     // 1) persist into lookups.xlsx (col A of Locations)
     const res = await window.electronAPI.addNewLocation(name);
-    if (!res.success) {
-      alert(res.message);
-      return;
+    // only reload + select if a brand‑new location was actually added
+    if (res.success) {
+      await loadLocationsForModal(selectedCompany);
+      selectLocationModal.value = name;
+      inputNewLocationModal.value = '';
     }
-    // 2) reload dropdown for this company
-    await loadLocationsForModal(selectedCompany);
-    // 3) select the newly added location
-    selectLocationModal.value = name;
-    inputNewLocationModal.value = '';
   });
 
 

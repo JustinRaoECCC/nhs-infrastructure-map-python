@@ -28,7 +28,7 @@ window.findLocationWrapper  = findLocationWrapper;
 async function buildFilterTree() {
   filterTree.innerHTML = '';
 
-  const companies = await window.electronAPI.getCompanies();
+  const companies = await window.electronAPI.getActiveCompanies();
 
   for (const company of companies) {
     const companyDiv = createCollapsibleItem(company, 'company');
@@ -44,11 +44,34 @@ async function buildFilterTree() {
 
       for (const assetType of assetTypes) {
         if (assetType && assetType.toLowerCase() === 'sheet') continue;
-        const assetTypeDiv = document.createElement('div');
-        assetTypeDiv.classList.add('collapsible-child');
-        assetTypeDiv.textContent = assetType;
-        assetTypeDiv.addEventListener('click', () => openAddInfrastructureModal(company, location, assetType));
-        locationDiv.querySelector('.collapsible-content').appendChild(assetTypeDiv);
+        // Wrap each asset‑type in its own header + menu button
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('collapsible-wrapper', 'asset-type-wrapper');
+
+        const header = document.createElement('div');
+        header.classList.add('collapsible-header');
+
+        // 1) three‑dots “⋮” menu button
+        const menuBtn = document.createElement('button');
+        menuBtn.classList.add('asset-type-menu-button');
+        menuBtn.textContent = '⋮';
+        menuBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          openAssetTypeColorMenu(assetType, location, menuBtn);
+        });
+
+        // 2) title opens Add‑Infra modal
+        const titleSpan = document.createElement('span');
+        titleSpan.classList.add('collapsible-title');
+        titleSpan.textContent = assetType;
+        titleSpan.addEventListener('click', () =>
+          openAddInfrastructureModal(company, location, assetType)
+        );
+
+        header.appendChild(menuBtn);
+        header.appendChild(titleSpan);
+        wrapper.appendChild(header);
+        locationDiv.querySelector('.collapsible-content').appendChild(wrapper);
       }
 
       companyDiv.querySelector('.collapsible-content').appendChild(locationDiv);
@@ -138,4 +161,51 @@ function buildFilterTreeFromData(data) {
     filterTree.appendChild(compDiv);
     // You can expand this with locations/assets if desired
   });
+}
+
+/**
+ * Show a little <input type="color"> near the “⋮” button.
+ */
+async function openAssetTypeColorMenu(assetType, location, anchorBtn) {
+  document.querySelectorAll('.asset-type-color-menu')
+          .forEach(m => m.remove());
+
+  // Build menu
+  const menu = document.createElement('div');
+  menu.classList.add('asset-type-color-menu');
+  menu.style.position = 'absolute';
+  document.body.appendChild(menu);
+
+  // 1) Create the color‐picker
+  const input = document.createElement('input');
+  input.type = 'color';
+  // fetch the color for this exact (assetType, location) row
+  let current = await window.electronAPI.getAssetTypeColorForLocation(assetType, location);
+  // fallback to the generic lookup just in case
+  if (!current) {
+    current = await window.electronAPI.getAssetTypeColor(assetType);
+  }
+  input.value = current || '#000000';
+  menu.appendChild(input);
+
+  // 2) Create a Confirm button — the only way to close/apply
+  const btnConfirm = document.createElement('button');
+  btnConfirm.textContent = 'Confirm';
+  btnConfirm.classList.add('asset-type-color-confirm');
+  btnConfirm.addEventListener('click', async () => {
+    const newColor = input.value;
+    const res = await window.electronAPI.setAssetTypeColorForLocation(assetType, location, newColor);
+    if (!res.success) {
+      alert('Could not save color: ' + res.message);
+    }
+    menu.remove();
+    // redraw pins next tick
+    setTimeout(() => window.refreshMarkers(), 0);
+  });
+  menu.appendChild(btnConfirm);
+
+  // Position it under the button
+  const rect = anchorBtn.getBoundingClientRect();
+  menu.style.top  = `${rect.bottom + window.scrollY}px`;
+  menu.style.left = `${rect.left  + window.scrollX}px`;
 }

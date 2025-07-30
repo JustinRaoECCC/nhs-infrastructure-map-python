@@ -44,7 +44,7 @@ def ensure_lookups_file():
     ensure_data_folder()
 
     if not os.path.exists(LOOKUPS_PATH):
-        # fresh file: create Companies (with active flag), Locations, and AssetTypes
+        # fresh file: create Companies, Locations, and AssetTypes (now with color!)
         with pd.ExcelWriter(LOOKUPS_PATH, engine='openpyxl') as writer:
             # Companies: “company” + “active”
             pd.DataFrame(columns=['company','active']) \
@@ -52,8 +52,8 @@ def ensure_lookups_file():
             # Locations: “location” + parent “company”
             pd.DataFrame(columns=['location','company']) \
               .to_excel(writer, sheet_name='Locations', index=False)
-            # AssetTypes: “asset_type” + parent “location”
-            pd.DataFrame(columns=['asset_type','location']) \
+            # AssetTypes: “asset_type” + parent “location” + “color”
+            pd.DataFrame(columns=['asset_type','location','color']) \
               .to_excel(writer, sheet_name='AssetTypes', index=False)
         return
 
@@ -80,6 +80,7 @@ def ensure_lookups_file():
         ws = wb.create_sheet('AssetTypes')
         ws['A1'] = 'asset_type'
         ws['B1'] = 'location'
+        ws['C1'] = 'color'
         changed = True
     if changed:
         wb.save(LOOKUPS_PATH)
@@ -130,8 +131,13 @@ def append_to_lookup(sheet_name: str, entry_value: str, second_value: str = None
     if sheet_name == 'Companies':
         # second_value now is the exact string we want in column B ("" or "TRUE")
         ws.append([val, second_value])
-    elif sheet_name == 'Locations' or sheet_name == 'AssetTypes':
+    elif sheet_name == 'Locations':
         ws.append([val, second_value or ''])
+    elif sheet_name == 'AssetTypes':
+        # write asset_type, parent_location, AND random colour
+        # make sure header row has 3 columns: A=asset_type, B=location, C=color
+        color = _get_random_color()
+        ws.append([val, second_value or '', color])
     else:
         ws.append([val])
         
@@ -240,30 +246,60 @@ def add_new_company(name: str, active: bool = False) -> bool:
 
 def update_lookup_parent(sheet_name: str, entry_value: str, parent_value: str) -> bool:
     """
-    In LOOKUPS_PATH[sheet_name], find the row where col A == entry_value
-    (case‑insensitive), set col B = parent_value, save, return True.
-    If not found, append [entry_value, parent_value].
+    In LOOKUPS_PATH[sheet_name], find or append rows of (entry, parent).
+    * AssetTypes → fill a blank‐parent row first, then append new rows
+      (each with its own random color), never reuse colors.
+    * Companies/Locations → do nothing if already present; else update or append.
     """
     wb = load_workbook(LOOKUPS_PATH)
     if sheet_name not in wb.sheetnames:
         return False
     ws = wb[sheet_name]
-    target = entry_value.strip().lower()
-    # search rows 2+ in columns A–C (if present)
-    for row in ws.iter_rows(min_row=2, max_col=3):
-        val = row[0].value
-        if isinstance(val, str) and val.strip().lower() == entry_value.strip().lower():
-            # existing entry: update parent in Col B
-            row[1].value = parent_value
+
+    entry = entry_value.strip()
+    parent = parent_value.strip()
+
+    # ——— AssetTypes: blank‑row‑first, then append new ones, never reuse colors ———
+    if sheet_name == 'AssetTypes':
+        # find all rows matching this asset_type
+        matches = [
+            row for row in ws.iter_rows(min_row=2, max_col=3)
+            if isinstance(row[0].value, str)
+               and row[0].value.strip().lower() == entry.lower()
+        ]
+
+        # 1) fill in any blank‐parent row
+        for row in matches:
+            loc = (row[1].value or '').strip()
+            if loc == '':
+                row[1].value = parent
+                wb.save(LOOKUPS_PATH)
+                return True
+
+        # 2) if this exact parent already exists, do nothing
+        for row in matches:
+            if (row[1].value or '').strip().lower() == parent.lower():
+                return False
+
+        # 3) otherwise append a brand‐new row with its own color
+        ws.append([entry, parent, _get_random_color()])
+        wb.save(LOOKUPS_PATH)
+        return True
+
+    # ——— Companies & Locations: update in‑place if found, no‑op if same, else append ———
+    for row in ws.iter_rows(min_row=2, max_col=2):
+        val = (row[0].value or '').strip()
+        if val.lower() == entry.lower():
+            # if same parent already, no‑op
+            if (row[1].value or '').strip().lower() == parent.lower():
+                return False
+            # else overwrite
+            row[1].value = parent
             wb.save(LOOKUPS_PATH)
             return True
 
-    # not found → build new row: [entry, parent, (color if sheet has 3 cols)]
-    new_row = [entry_value.strip(), parent_value]
-    # if this sheet already has 3 columns (i.e. a color column), generate one
-    if ws.max_column >= 3:
-        new_row.append(_get_random_color())
-    ws.append(new_row)
+    # not found → append new row
+    ws.append([entry, parent])
     wb.save(LOOKUPS_PATH)
     return True
 
@@ -282,6 +318,31 @@ def get_asset_type_color(sheet_name: str, asset_type: str) -> str | None:
         if isinstance(val, str) and val.strip().lower() == asset_type.strip().lower():
             return row[2].value
     return None
+
+def get_asset_type_color_for_location(
+    sheet_name: str,
+    asset_type: str,
+    location:   str
+) -> str | None:
+    """
+    Return the hex color for the row matching both asset_type AND location.
+    """
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if sheet_name not in wb.sheetnames:
+        return None
+    ws = wb[sheet_name]
+    for row in ws.iter_rows(min_row=2, max_col=3):
+        at   = row[0].value
+        loc  = (row[1].value or '').strip()
+        col  = row[2].value
+        if (
+          isinstance(at, str)
+          and at.strip().lower() == asset_type.strip().lower()
+          and loc.lower() == location.strip().lower()
+        ):
+            return col
+    return None
+
 
 # ─── Algorithm Parameters (4th sheet) ────────────────────────────────────
 def read_algorithm_parameters() -> list[dict]:

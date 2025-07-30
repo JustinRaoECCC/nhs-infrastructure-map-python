@@ -554,15 +554,26 @@ body, html {
 /* ───────────────────────────────────────────────────────────────────────── */
 /* Custom map pin styling                                                 */
 /* ───────────────────────────────────────────────────────────────────────── */
-.marker-dot {
+.custom-div-icon .marker-dot {
+  /* inner color */
+  background-color: var(--marker-color, #000);
+
+  /* white ring */
+  border: 1px solid #fff;
+
+  /* thin, semi‑opaque black outline + soft glow */
+  box-shadow:
+    /* 1px semi‑transparent outline */
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    /* inner glow */
+    0 0 6px rgba(0, 0, 0, 0.3),
+    /* outer glow */
+    0 0 12px rgba(0, 0, 0, 0.2);
+
   width: 12px;
   height: 12px;
-  display: block;
   border-radius: 50%;
-  border: 1px solid white;
-  box-shadow: 0 0 3px rgba(0,0,0,0.5);
-  /* color is provided via a CSS variable */
-  background-color: var(--marker-color);
+  display: block;
 }
 
 /* ─── Loading overlay ───────────────────────────────────────────────── */
@@ -786,4 +797,27 @@ body, html {
 }
 .tab-content.active {
   display: block;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background-color: #DDD;  /* same light grey you want */
+}
+
+.asset-type-menu-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1em;
+  padding: 0 .3em;
+}
+
+.asset-type-color-menu {
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: .5em;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  z-index: 1000;
 }

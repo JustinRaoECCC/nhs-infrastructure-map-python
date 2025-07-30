@@ -9,7 +9,17 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 import eel
 
-from .lookups_manager import ensure_data_folder, ensure_lookups_file, delete_all_data_files, get_asset_type_color, read_algorithm_parameters, write_algorithm_parameters, read_workplan_details, write_workplan_details
+from .lookups_manager import (
+    ensure_data_folder,
+    ensure_lookups_file,
+    delete_all_data_files,
+    get_asset_type_color,
+    get_asset_type_color_for_location,
+    read_algorithm_parameters,
+    write_algorithm_parameters,
+    read_workplan_details,
+    write_workplan_details
+)
 from .data_manager     import DataManager
 from .data_nuke import data_nuke
 from .bulk_importer import get_sheet_names, import_sheet_data
@@ -61,8 +71,38 @@ def get_infrastructure_data():
     stations = dm.list_stations()
     # inject the saved color per province→asset_type
     for stn in stations:
-        col = get_asset_type_color(stn['province'], stn['asset_type'])
-        stn['color'] = col or '#000000'   # fallback if something went wrong
+        # 1) try the specific (asset_type + province) match
+        # (our Eel‑exposed wrapper now takes exactly two args)
+        col = get_asset_type_color_for_location(
+                 stn['asset_type'],
+                 stn['province']
+              )
+        # 2) fallback to the generic first‑row lookup
+        if not col:
+            col = get_asset_type_color('AssetTypes', stn['asset_type'])
+        stn['color'] = col or '#000000'
+
+    # 1) Build the union of all extra‑sections per asset_type
+    #    schema_map = { asset_type: { section_name: set(fields) } }
+    schema_map: dict[str, dict[str,set[str]]] = {}
+    for stn in stations:
+        at = stn.get('asset_type')
+        for key in stn:
+            if ' – ' not in key:
+                continue
+            section, field = key.split(' – ', 1)
+            schema_map.setdefault(at, {}).setdefault(section, set()).add(field)
+
+    # 2) Back‑fill each station so it has every section/field in its asset_type’s schema
+    for stn in stations:
+        at = stn.get('asset_type')
+        for section, fields in schema_map.get(at, {}).items():
+            for field in fields:
+                compound_key = f"{section} – {field}"
+                # if this station didn’t have it, give it an empty slot
+                if compound_key not in stn:
+                    stn[compound_key] = None
+
     return stations
 
 
@@ -84,9 +124,36 @@ def get_companies():
 
 @eel.expose
 def add_new_company(name, active=False):
-    # front‑end will pass active=False for “+ Add”,
-    # then active=True when the user hits Confirm
-    return dm.add_company(name, active)
+    """
+    If active=False: append to Companies with blank active (for the dropdown only).
+    If active=True: set the existing row’s active col to “TRUE” (so it shows up in filters).
+    """
+    from .lookups_manager import update_lookup_parent
+    if active:
+        ok = update_lookup_parent('Companies', name, 'TRUE')
+        return {"success": ok, "added": False}
+    else:
+        return dm.add_company(name, active)
+
+
+@eel.expose
+def get_active_companies():
+    """
+    Return only those companies whose “active” column is exactly "TRUE".
+    """
+    from openpyxl import load_workbook
+    from .lookups_manager import LOOKUPS_PATH
+
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if 'Companies' not in wb.sheetnames:
+        return []
+    ws = wb['Companies']
+    out = []
+    for name, flag in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+        if isinstance(name, str) and isinstance(flag, str) \
+           and flag.strip().upper() == 'TRUE':
+            out.append(name)
+    return out
 
 @eel.expose
 def get_locations_for_company(company_name):
@@ -143,6 +210,61 @@ def save_station_details(station_obj):
 def delete_station(station_id):
     # implement/delete in DataManager: remove the row from Excel (and DB)
     return dm.delete_station(station_id)
+
+# ─── Asset‑Type Color APIs ─────────────────────────────────────────────────
+@eel.expose
+def get_asset_type_color_lookup(asset_type):
+    from .lookups_manager import get_asset_type_color
+    # returns hex string or None
+    return get_asset_type_color('AssetTypes', asset_type)
+
+@eel.expose
+def set_asset_type_color(asset_type, color):
+    """
+    Update the color for an asset type in lookups.xlsx.
+    """
+    from .lookups_manager import LOOKUPS_PATH
+    from openpyxl import load_workbook
+    wb = load_workbook(LOOKUPS_PATH)
+    if 'AssetTypes' not in wb.sheetnames:
+        return {"success": False, "message": "AssetTypes sheet missing."}
+    ws = wb['AssetTypes']
+    for row in ws.iter_rows(min_row=2, max_col=3):
+        # only match on type
+        if isinstance(row[0].value, str) \
+          and row[0].value.strip().lower() == asset_type.strip().lower() \
+          and ((row[1].value or '').strip() == ''):
+            # this is the “generic” row (no location)
+            row[2].value = color
+            wb.save(LOOKUPS_PATH)
+            return {"success": True}
+    return {"success": False, "message": f"Asset type '{asset_type}' not found."}
+
+# expose the location‑specific color lookup
+@eel.expose
+def get_asset_type_color_for_location(asset_type, location):
+    from .lookups_manager import get_asset_type_color_for_location
+    # sheet_name is always 'AssetTypes'
+    return get_asset_type_color_for_location('AssetTypes', asset_type, location)
+
+@eel.expose
+def set_asset_type_color_for_location(asset_type, location, color):
+    from .lookups_manager import LOOKUPS_PATH
+    from openpyxl import load_workbook
+    wb = load_workbook(LOOKUPS_PATH)
+    ws = wb['AssetTypes']
+    for row in ws.iter_rows(min_row=2, max_col=3):
+        at = row[0].value
+        loc = (row[1].value or '').strip()
+        if (
+          isinstance(at, str)
+          and at.strip().lower() == asset_type.strip().lower()
+          and loc.lower() == location.strip().lower()
+        ):
+            row[2].value = color
+            wb.save(LOOKUPS_PATH)
+            return {"success": True}
+    return {"success": False, "message": f"No row for {asset_type}@{location}"}
 
 
 # ─── App startup ────────────────────────────────────────────────────────────

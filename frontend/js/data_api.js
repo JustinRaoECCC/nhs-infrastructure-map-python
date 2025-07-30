@@ -12,11 +12,16 @@ window.electronAPI = {
   addNewLocation:   loc => eel.add_new_location(loc)(),
   getAssetTypes:    () => eel.get_asset_types()(),
   addNewAssetType:  at  => eel.add_new_asset_type(at)(),
+  getAssetTypeColor: at    => eel.get_asset_type_color_lookup(at)(),
+  setAssetTypeColor: (at,c) => eel.set_asset_type_color(at,c)(),
+  getAssetTypeColorForLocation: (at,loc) => eel.get_asset_type_color_for_location(at, loc)(),
+  setAssetTypeColorForLocation: (at, loc, c) => eel.set_asset_type_color_for_location(at, loc, c)(),
   getStationData:   () => eel.get_infrastructure_data()(),
   createNewStation: obj => eel.create_new_station(obj)(),
 
   getCompanies:     () => eel.get_companies()(),
-addNewCompany: (name, active=false) => eel.add_new_company(name, active)(),
+  addNewCompany: (name, active=false) => eel.add_new_company(name, active)(),
+  getActiveCompanies: () => eel.get_active_companies()(),
 
   getLocationsForCompany: (company) => eel.get_locations_for_company(company)(),
   getAssetTypesForLocation: (company, location) => eel.get_asset_types_for_location(company, location)(),
