@@ -264,3 +264,21 @@ class DataManager:
             added += 1
 
         return {"success": True, "added": added}
+
+    def update_station(self, station_obj: dict):
+        # first update Excel, then DB (or vice‑versa)
+        res_xl = self.excel.update_station(station_obj)
+        res_db = self.db.update_station(station_obj)
+        return res_db if self.use_db else res_xl
+
+    def delete_station(self, station_id: str):
+        # need to know province+asset_type for Excel delete
+        # find the record in the flat Excel list
+        recs = self.excel.list_stations()
+        target = next((r for r in recs if r["station_id"] == station_id), None)
+        if not target:
+            return {"success": False, "message": f"Station '{station_id}' not found."}
+
+        res_xl = self.excel.delete_station(target)
+        res_db = self.db.delete_station(station_id)
+        return res_db if self.use_db else res_xl

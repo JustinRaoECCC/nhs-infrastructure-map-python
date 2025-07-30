@@ -747,7 +747,43 @@ body, html {
   text-align: left;
 }
 
-.filter-checkbox {
-  margin-left: 0.5em;
+/* ─── Tab Container ───────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 1em;
+}
+
+/* ─── Individual Tabs ─────────────────────────────────────────────────── */
+.tabs .tab {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-bottom: none;             /* hide the bottom edge so it “connects” to the panel */
+  border-radius: 5px 5px 0 0;      /* rounded top corners only */
+  padding: 0.5em 1em;
+  margin-right: 0.25em;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+/* Hover state */
+.tabs .tab:hover {
+  background-color: #e0e0e0;
+}
+
+/* Active tab */
+.tabs .tab.active {
+  background-color: #fff;          /* white to match the panel */
+  font-weight: bold;
+}
+
+/* ─── Tab Panel ───────────────────────────────────────────────────────── */
+.tab-content {
+  border: 1px solid #ccc;
+  padding: 1em;
+  /* Hide all but the active one */
+  display: none;
+}
+.tab-content.active {
+  display: block;
 }

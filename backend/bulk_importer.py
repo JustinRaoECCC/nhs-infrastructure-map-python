@@ -66,13 +66,13 @@ def import_sheet_data(
 
     # 4) Batch‑write: one workbook per province
     workbooks = {}  # loc_path -> Workbook
-    sheets    = {}  # (loc_path, asset_type) -> Worksheet
+    sheets = {}     # (loc_path, asset_type) -> Worksheet
 
     for idx, row_vals in enumerate(data_rows, start=1):
-        rec         = dict(zip(headers, row_vals))
-        province    = str(location_filter or "").strip()
-        asset_type  = str(asset_type_filter or "").strip()
-        sid         = str(rec.get("Station ID") or "").strip()
+        rec = dict(zip(headers, row_vals))
+        province = str(location_filter or "").strip()
+        asset_type = str(asset_type_filter or "").strip()
+        sid = str(rec.get("Station ID") or "").strip()
 
         dm.add_location(province)  # ensures the lookup & workbook exist
 
@@ -87,9 +87,9 @@ def import_sheet_data(
             "Status":     str(rec.get("Status") or "UNKNOWN").strip(),
         }
 
-        # Extras
+        # Extras: skip any mapped or redundant columns (including original "Station Name")
         extras = {}
-        skip_cols = set(base.keys())
+        skip_cols = set(base.keys()) | {"Station Name"}
         for col, val in rec.items():
             if not col or col in skip_cols:
                 continue
@@ -100,6 +100,7 @@ def import_sheet_data(
             else:
                 extras.setdefault("Extra Data", {})[col] = val
 
+        # Flatten extras into full_row
         full_row = {**base}
         for sec, fields in extras.items():
             for fld, val in fields.items():
@@ -113,7 +114,7 @@ def import_sheet_data(
             workbooks[loc_path] = wb_out
 
         # Load (or reuse) the asset‑type sheet
-        key    = (loc_path, asset_type)
+        key = (loc_path, asset_type)
         ws_out = sheets.get(key)
         if ws_out is None:
             if asset_type not in wb_out.sheetnames:
@@ -128,7 +129,13 @@ def import_sheet_data(
         else:
             header_list = [c.value for c in ws_out[2]]
 
-        # Append the row
+        # Add any new extra‑section columns to the header
+        missing = [h for h in full_row.keys() if h not in header_list]
+        for new_header in missing:
+            header_list.append(new_header)
+            ws_out.cell(row=2, column=len(header_list), value=new_header)
+
+        # Append the row in the correct column order
         ws_out.append([full_row.get(h) for h in header_list])
 
         added += 1

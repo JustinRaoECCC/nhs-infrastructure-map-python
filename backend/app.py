@@ -133,6 +133,17 @@ def save_workplan_details(entries):
     """
     return write_workplan_details(entries)
 
+@eel.expose
+def save_station_details(station_obj):
+    # implement/update in DataManager: apply generalInfo & extraSections,
+    # then return {"success":True} or {"success":False,"message":...}
+    return dm.update_station(station_obj)
+
+@eel.expose
+def delete_station(station_id):
+    # implement/delete in DataManager: remove the row from Excel (and DB)
+    return dm.delete_station(station_id)
+
 
 # ─── App startup ────────────────────────────────────────────────────────────
 def main():

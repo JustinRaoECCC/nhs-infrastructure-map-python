@@ -144,3 +144,97 @@ class ExcelRepo(BaseRepo):
             "success": True,
             "added": added
         }
+    
+    def update_station(self, station_obj: dict):
+        sid    = station_obj["generalInfo"]["stationId"]
+        loc    = station_obj["generalInfo"]["province"]
+        asset  = station_obj["assetType"]
+        path   = os.path.join(LOCATIONS_DIR, f"{loc}.xlsx")
+        if not os.path.exists(path):
+            return {"success": False, "message": f"No workbook for '{loc}'"}
+
+        wb = openpyxl.load_workbook(path)
+        if asset not in wb.sheetnames:
+            return {"success": False, "message": f"No sheet '{asset}' in '{loc}.xlsx'"}
+        ws = wb[asset]
+
+        # grab headers from row 2
+        headers = [c.value for c in ws[2]]
+        try:
+            idx_sid = headers.index("Station ID") + 1
+        except ValueError:
+            return {"success": False, "message": "Missing 'Station ID' column"}
+
+        # find the row for this station
+        row_num = None
+        for r in range(3, ws.max_row + 1):
+            if str(ws.cell(row=r, column=idx_sid).value).strip() == sid:
+                row_num = r
+                break
+        if row_num is None:
+            return {"success": False, "message": f"Station '{sid}' not found"}
+
+        # update core fields
+        gen = station_obj["generalInfo"]
+        mapping = {
+            "Site Name":  gen["siteName"],
+            "Province":   gen["province"],
+            "Latitude":   gen["latitude"],
+            "Longitude":  gen["longitude"],
+            "Status":     gen["status"],
+        }
+        for col_name, val in mapping.items():
+            if col_name in headers:
+                col_idx = headers.index(col_name) + 1
+            else:
+                headers.append(col_name)
+                col_idx = len(headers)
+                ws.cell(row=2, column=col_idx, value=col_name)
+            ws.cell(row=row_num, column=col_idx, value=val)
+
+        # update extraSections
+        for sec, fields in station_obj.get("extraSections", {}).items():
+            for fld, val in fields.items():
+                col_name = f"{sec} – {fld}"
+                if col_name in headers:
+                    col_idx = headers.index(col_name) + 1
+                else:
+                    headers.append(col_name)
+                    col_idx = len(headers)
+                    ws.cell(row=2, column=col_idx, value=col_name)
+                ws.cell(row=row_num, column=col_idx, value=val)
+
+        wb.save(path)
+        return {"success": True}
+
+
+    def delete_station(self, station_obj: dict):
+        sid    = station_obj["station_id"]
+        loc    = station_obj["province"]
+        asset  = station_obj["asset_type"]
+        path   = os.path.join(LOCATIONS_DIR, f"{loc}.xlsx")
+        if not os.path.exists(path):
+            return {"success": False, "message": f"No workbook for '{loc}'"}
+
+        wb = openpyxl.load_workbook(path)
+        if asset not in wb.sheetnames:
+            return {"success": False, "message": f"No sheet '{asset}' in '{loc}.xlsx'"}
+        ws = wb[asset]
+
+        headers = [c.value for c in ws[2]]
+        try:
+            idx_sid = headers.index("Station ID") + 1
+        except ValueError:
+            return {"success": False, "message": "Missing 'Station ID' column"}
+
+        # find and delete the row
+        row_to_del = None
+        for r in range(3, ws.max_row + 1):
+            if str(ws.cell(row=r, column=idx_sid).value).strip() == sid:
+                row_to_del = r
+                break
+        if row_to_del is None:
+            return {"success": False, "message": f"Station '{sid}' not found"}
+        ws.delete_rows(row_to_del)
+        wb.save(path)
+        return {"success": True}

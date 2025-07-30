@@ -242,8 +242,36 @@ class DBRepo(BaseRepo):
             return {
                 "companies": companies,
                 "locations": locations,
-                "asset_types": asset_types
+                "asset_type"
+                "s": asset_types
             }
+        
+    def update_station(self, station_obj: dict):
+        sid = station_obj["generalInfo"]["stationId"]
+        with self.Session() as s:
+            st = s.query(Station).filter_by(station_id=sid).first()
+            if not st:
+                return {"success": False, "message": f"Station '{sid}' not found"}
+            gen = station_obj["generalInfo"]
+            st.name      = gen["siteName"]
+            st.province  = gen["province"]
+            st.lat       = gen["latitude"]
+            st.lon       = gen["longitude"]
+            st.status    = gen["status"]
+            # overwrite JSON extra_data
+            st.extra_data = station_obj.get("extraSections", {})
+            s.commit()
+        return {"success": True}
+
+    def delete_station(self, station_id: str):
+        with self.Session() as s:
+            st = s.query(Station).filter_by(station_id=station_id).first()
+            if not st:
+                return {"success": False, "message": f"Station '{station_id}' not found"}
+            s.delete(st)
+            s.commit()
+        return {"success": True}
+
 
 
 class Company(Base):

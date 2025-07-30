@@ -1,150 +1,104 @@
 // filters.js
 
-// ─── Global filter state ─────────────────────────────────────────────────────
-window.filterState = {
-  companies: {},    // { "Company A": true, ... }
-  locations: {},    // { "BC": true, "AB": true, ... }
-  asset_types: {}   // { "cableway": true, ... }
-};
-
-function mapTypeToStateKey(type) {
-  if (type === 'company')    return 'companies';
-  if (type === 'location')   return 'locations';
-  if (type === 'asset_type') return 'asset_types';
-  return null;
-}
-
 const filterTree = document.getElementById('filterTree');
 
-// ─── Helpers to find wrappers ────────────────────────────────────────────────
+// ─── Helpers to append a new node without collapsing the rest ─────────────────
 function findCompanyWrapper(companyName) {
-  return Array.from(filterTree.querySelectorAll('.collapsible-wrapper'))
-    .find(w => w.querySelector('.collapsible-title').textContent === companyName);
+  return Array.from(
+    filterTree.querySelectorAll('.collapsible-wrapper')
+  ).find(w =>
+    w.querySelector('.collapsible-title').textContent === companyName
+  );
 }
-function findLocationWrapper(companyWrapper, locationName) {
-  return Array.from(companyWrapper.querySelectorAll('.collapsible-wrapper'))
-    .find(w => w.querySelector('.collapsible-title').textContent === locationName);
-}
-window.findCompanyWrapper  = findCompanyWrapper;
-window.findLocationWrapper = findLocationWrapper;
 
-// ─── Build the tree on startup ───────────────────────────────────────────────
+function findLocationWrapper(companyWrapper, locationName) {
+  return Array.from(
+    companyWrapper.querySelectorAll('.collapsible-wrapper')
+  ).find(w =>
+    w.querySelector('.collapsible-title').textContent === locationName
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+window.findCompanyWrapper   = findCompanyWrapper;
+window.findLocationWrapper  = findLocationWrapper;
+
+
+
+// Main entry to refresh the filter panel
 async function buildFilterTree() {
   filterTree.innerHTML = '';
+
   const companies = await window.electronAPI.getCompanies();
 
   for (const company of companies) {
-    // Company node (header + collapsible content)
-    const compDiv = createCollapsibleItem(company, 'company');
+    const companyDiv = createCollapsibleItem(company, 'company');
 
-    // Locations under this company
+    // Fetch locations for this company (mocked for now)
     const locations = await window.electronAPI.getLocationsForCompany(company);
+
     for (const location of locations) {
-      const locDiv = createCollapsibleItem(location, 'location', company);
+      const locationDiv = createCollapsibleItem(location, 'location', company);
 
-      // Asset‑types under this location
+      // Fetch asset types for this location (mocked for now)
       const assetTypes = await window.electronAPI.getAssetTypesForLocation(company, location);
+
       for (const assetType of assetTypes) {
-        if (!assetType || assetType.toLowerCase() === 'sheet') continue;
-
-        // Leaf node: flex container with label + checkbox
-        const assetDiv = document.createElement('div');
-        assetDiv.classList.add('collapsible-child');
-        assetDiv.style.display = 'flex';
-        assetDiv.style.alignItems = 'center';
-        assetDiv.style.justifyContent = 'space-between';
-
-        const label = document.createElement('span');
-        label.textContent = assetType;
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = true;
-        cb.classList.add('filter-checkbox');
-        cb.style.marginLeft = '8px';
-
-        // initialize and wire up asset_types state
-        window.filterState.asset_types[assetType] = true;
-        cb.addEventListener('change', e => {
-          window.filterState.asset_types[assetType] = e.target.checked;
-          window.refreshMarkers();
-        });
-
-        // clicking the label opens the add‑infra modal
-        label.addEventListener('click', () =>
-          openAddInfrastructureModal(company, location, assetType)
-        );
-
-        assetDiv.appendChild(label);
-        assetDiv.appendChild(cb);
-        locDiv.querySelector('.collapsible-content').appendChild(assetDiv);
+        if (assetType && assetType.toLowerCase() === 'sheet') continue;
+        const assetTypeDiv = document.createElement('div');
+        assetTypeDiv.classList.add('collapsible-child');
+        assetTypeDiv.textContent = assetType;
+        assetTypeDiv.addEventListener('click', () => openAddInfrastructureModal(company, location, assetType));
+        locationDiv.querySelector('.collapsible-content').appendChild(assetTypeDiv);
       }
 
-      compDiv.querySelector('.collapsible-content').appendChild(locDiv);
+      companyDiv.querySelector('.collapsible-content').appendChild(locationDiv);
     }
 
-    filterTree.appendChild(compDiv);
+    filterTree.appendChild(companyDiv);
   }
 }
+
 window.buildFilterTree = buildFilterTree;
 
-// ─── Factory for company/location nodes ─────────────────────────────────────
+// Reusable collapsible item
 function createCollapsibleItem(title, type, parentCompany = null) {
   const wrapper = document.createElement('div');
   wrapper.classList.add('collapsible-wrapper');
 
   const header = document.createElement('div');
   header.classList.add('collapsible-header');
-  header.style.display = 'flex';
-  header.style.alignItems = 'center';
 
-  // ─ toggle button ─
   const toggleBtn = document.createElement('button');
   toggleBtn.classList.add('toggle-collapse-button');
   toggleBtn.textContent = '+';
 
-  // ─ title ─
   const titleSpan = document.createElement('span');
   titleSpan.classList.add('collapsible-title');
   titleSpan.textContent = title;
 
-  // ─ filter checkbox ─
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.checked = true;
-  checkbox.classList.add('filter-checkbox');
-  checkbox.style.marginLeft = '8px';
+  const content = document.createElement('div');
+  content.classList.add('collapsible-content');
+  content.style.display = 'none';
 
-  // init state key and wire up
-  const stateKey = mapTypeToStateKey(type);
-  if (stateKey) {
-    window.filterState[stateKey][title] = true;
-    checkbox.addEventListener('change', e => {
-      window.filterState[stateKey][title] = e.target.checked;
-      window.refreshMarkers();
-    });
-  }
-
-  // ─ toggle content on “+” click ─
+  // Left‑of‑title: toggle collapse; right‑of‑title: open modal
+  // 1) Make the “+” button itself toggle (and stop propagation)
   toggleBtn.addEventListener('click', e => {
     e.stopPropagation();
-    const content = wrapper.querySelector('.collapsible-content');
+    // check computed style so we catch the CSS‑hidden default
     const isHidden = getComputedStyle(content).display === 'none';
-    content.style.display = isHidden ? 'block' : 'none';
-    toggleBtn.textContent = isHidden ? '–' : '+';
+    content.style.display    = isHidden ? 'block' : 'none';
+    toggleBtn.textContent    = isHidden ? '–' : '+';
   });
 
-  // ─ header click: either toggle or open modal ─
+  // 2) On header click, decide based on X coordinate
   header.addEventListener('click', e => {
     const rect = titleSpan.getBoundingClientRect();
-    const content = wrapper.querySelector('.collapsible-content');
     if (e.clientX < rect.left) {
-      // toggle expand/collapse
       const isHidden = getComputedStyle(content).display === 'none';
       content.style.display = isHidden ? 'block' : 'none';
       toggleBtn.textContent = isHidden ? '–' : '+';
     } else {
-      // click to right → open the appropriate modal
+      // click to the right of the text → open the matching modal
       if (type === 'company') {
         window.openLocationModal(title);
       } else if (type === 'location') {
@@ -153,32 +107,35 @@ function createCollapsibleItem(title, type, parentCompany = null) {
     }
   });
 
-  // ─ direct title click also opens modal ─
+
+  // Open modal on title click
   titleSpan.addEventListener('click', () => {
     if (type === 'company') window.openLocationModal(title);
     else if (type === 'location') window.openAssetTypeModal(parentCompany, title);
   });
 
-  // ─ build DOM ─
   header.appendChild(toggleBtn);
   header.appendChild(titleSpan);
-  header.appendChild(checkbox);
   wrapper.appendChild(header);
-
-  const content = document.createElement('div');
-  content.classList.add('collapsible-content');
-  content.style.display = 'none';
   wrapper.appendChild(content);
 
   return wrapper;
 }
 
-// ─── Helper to open the Add‑Infra modal ─────────────────────────────────────
 function openAddInfrastructureModal(company, location, assetType) {
   window.prefillAndOpenAddInfraModal(location, assetType);
 }
 
-// ─── On initial load ───────────────────────────────────────────────────────
+// On startup, load the full filter tree (companies → locations → asset‐types)
 document.addEventListener('DOMContentLoaded', async () => {
   await buildFilterTree();
 });
+
+function buildFilterTreeFromData(data) {
+  filterTree.innerHTML = '';
+  data.companies.forEach(company => {
+    const compDiv = createCollapsibleItem(company, 'company');
+    filterTree.appendChild(compDiv);
+    // You can expand this with locations/assets if desired
+  });
+}

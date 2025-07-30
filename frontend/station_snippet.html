@@ -1,7 +1,7 @@
 <!-- frontend/station_snippet.html -->
 <div id="stationPage">
-  <button id="backButton">&larr; Back to Map</button>
-  <h1 id="stationTitle"></h1>
+  <button id="backButton">&larr; Back to Main View</button>
+  <h1 id="stationTitle">STATION NAME (ID)</h1>
 
   <!-- Tabs -->
   <div class="tabs">
@@ -13,27 +13,68 @@
     <button class="tab" data-target="photos">Photos</button>
   </div>
 
-  <!-- Tab contents -->
+  <!-- Overview Panel -->
   <div id="overview" class="tab-content active">
-    <button id="unlockEditing">🔒 Unlock Editing</button>
+    <!-- General Information Section -->
     <div class="station-section">
-      <h3>General Information</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3>General Information</h3>
+        <button id="unlockEditing" class="open-modal-button">🔒 Unlock Editing</button>
+      </div>
       <table>
-        <tr><th>Station ID:</th><td id="giStationId"></td></tr>
-        <tr><th>Category:</th><td id="giCategory"></td></tr>
-        <tr><th>Site Name:</th><td id="giSiteName"></td></tr>
-        <tr><th>Province:</th><td id="giProvince"></td></tr>
-        <tr><th>Latitude:</th><td id="giLatitude"></td></tr>
-        <tr><th>Longitude:</th><td id="giLongitude"></td></tr>
-        <tr><th>Status:</th><td id="giStatus"></td></tr>
+        <tr>
+          <th>Station ID:</th>
+          <td><input id="giStationId" type="text" disabled /></td>
+        </tr>
+        <tr>
+          <th>Category:</th>
+          <td><input id="giCategory" type="text" disabled /></td>
+        </tr>
+        <tr>
+          <th>Site Name:</th>
+          <td><input id="giSiteName" type="text" disabled /></td>
+        </tr>
+        <tr>
+          <th>Province:</th>
+          <td><input id="giProvince" type="text" disabled /></td>
+        </tr>
+        <tr>
+          <th>Latitude:</th>
+          <td><input id="giLatitude" type="number" step="any" disabled /></td>
+        </tr>
+        <tr>
+          <th>Longitude:</th>
+          <td><input id="giLongitude" type="number" step="any" disabled /></td>
+        </tr>
+        <tr>
+          <th>Status:</th>
+          <td>
+            <select id="giStatus" disabled>
+              <option>Active</option>
+              <option>Inactive</option>
+              <option>Unknown</option>
+            </select>
+          </td>
+        </tr>
       </table>
     </div>
-    <button id="btnAddSectionOverview" class="btnAddField">+ Add Section</button>
-    <div id="extraSectionsOverview"></div>
+
+    <button id="btnStationAddSection">+ Add Section</button>
+
+    <!-- Container for dynamically‑added sections -->
+    <div id="stationSectionsContainer"></div>
+
+    <!-- Save / Delete -->
+    <div style="margin-top:1em;">
+      <button id="saveChanges">Save Changes</button>
+      <button id="deleteStation" style="margin-left:1em;">Delete Station</button>
+    </div>
   </div>
-  <div id="inspection-history" class="tab-content" style="display:none;"></div>
-  <div id="construction-history" class="tab-content" style="display:none;"></div>
-  <div id="high-priority-repairs" class="tab-content" style="display:none;"></div>
-  <div id="documents" class="tab-content" style="display:none;"></div>
-  <div id="photos" class="tab-content" style="display:none;"></div>
+
+  <!-- Other tabs (empty for now) -->
+  <div id="inspection-history" class="tab-content"></div>
+  <div id="construction-history" class="tab-content"></div>
+  <div id="high-priority-repairs" class="tab-content"></div>
+  <div id="documents" class="tab-content"></div>
+  <div id="photos" class="tab-content"></div>
 </div>

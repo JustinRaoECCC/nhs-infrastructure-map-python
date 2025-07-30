@@ -139,9 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mapContainer.style.display    = 'none';
     rightPanel.style.display      = 'none';
     dashPlaceholder.style.display = 'none';
-    if (!stationPlaceholder.innerHTML.trim()) {
-      stationPlaceholder.innerHTML = await fetch('station_snippet.html').then(r=>r.text());
-    }
+    stationPlaceholder.innerHTML = await fetch('station_snippet.html').then(r => r.text());
     stationPlaceholder.style.display = 'block';
     loadStationPage(stationId);
   });
