@@ -25,12 +25,7 @@ window.findLocationWrapper  = findLocationWrapper;
 
 
 // Main entry to refresh the filter panel
-
-
-let filtersInitialized = false;
 async function buildFilterTree() {
-  if (filtersInitialized) return;     // <-- skip on 2nd+ call
-  filtersInitialized = true;
   filterTree.innerHTML = '';
 
   const companies = await window.electronAPI.getActiveCompanies();
