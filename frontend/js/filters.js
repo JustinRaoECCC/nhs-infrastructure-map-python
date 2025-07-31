@@ -25,7 +25,12 @@ window.findLocationWrapper  = findLocationWrapper;
 
 
 // Main entry to refresh the filter panel
+
+
+let filtersInitialized = false;
 async function buildFilterTree() {
+  if (filtersInitialized) return;     // <-- skip on 2nd+ call
+  filtersInitialized = true;
   filterTree.innerHTML = '';
 
   const companies = await window.electronAPI.getActiveCompanies();
@@ -122,9 +127,9 @@ function createCollapsibleItem(title, type, parentCompany = null) {
       toggleBtn.textContent = isHidden ? '–' : '+';
     } else {
       // click to the right of the text → open the matching modal
-      if (type === 'company') {
+      if (type === 'company' && typeof window.openLocationModal === 'function') {
         window.openLocationModal(title);
-      } else if (type === 'location') {
+      } else if (type === 'location' && typeof window.openAssetTypeModal === 'function') {
         window.openAssetTypeModal(parentCompany, title);
       }
     }
@@ -133,8 +138,11 @@ function createCollapsibleItem(title, type, parentCompany = null) {
 
   // Open modal on title click
   titleSpan.addEventListener('click', () => {
-    if (type === 'company') window.openLocationModal(title);
-    else if (type === 'location') window.openAssetTypeModal(parentCompany, title);
+    if (type === 'company' && typeof window.openLocationModal === 'function') {
+      window.openLocationModal(title);
+    } else if (type === 'location' && typeof window.openAssetTypeModal === 'function') {
+      window.openAssetTypeModal(parentCompany, title);
+    }
   });
 
   header.appendChild(toggleBtn);

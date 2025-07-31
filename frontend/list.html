@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NHS Infrastructure List View</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Title Bar (same as map view) -->
+    <header class="title-bar">
+      <h1>NHS Infrastructure List</h1>
+      <div class="controls-row">
+        <div class="center-group">
+          <div class="dropdown">
+            <button class="dropbtn">View ▾</button>
+            <div class="dropdown-content">
+              <a href="index.html" id="btn-map-view">Map View</a>
+              <a href="list.html" id="btn-list-view">List View</a>
+              <a href="dashboard.html" id="btn-dashboard-view">Dashboard View</a>
+            </div>
+          </div>
+          <button id="btn-download">Download</button>
+        </div>
+        <button id="btnToggleBasemap" title="Switch basemap">🗺️</button>
+      </div>
+    </header>
+
+    <!-- Main View -->
+    <div class="main-view-wrapper">
+      <div class="main-content">
+        <!-- Left Filter Panel -->
+        <aside class="left-panel" style="flex:0 0 200px;">
+          <h2>Filters</h2>
+          <div id="filterTree"></div>
+        </aside>
+
+        <!-- List Container (table) -->
+        <div class="list-container" id="listContainer" style="order:1; flex:2; overflow:auto; padding:1em;">
+          <table id="stationTable" style="width:100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th>Station ID</th>
+                <th>Category</th>
+                <th>Site Name</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- rows injected by list_view.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Right Details Panel (quick-view) -->
+        <aside class="right-panel" id="rightPanel" style="order:2; flex:1; min-width:250px;">
+          <h2>Station Details</h2>
+          <div id="station-details">
+            <p><em>Hover over a row to see details</em></p>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <!-- Station placeholder (hidden until you click a station) -->
+    <div id="stationContentContainer"
+         style="display:none; flex:2; padding:1em; overflow:auto;">
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="text/javascript" src="/eel.js"></script>
+  <script src="js/data_api.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/list_view.js"></script>
+  <script src="js/station.js"></script>
+</body>
+</html>

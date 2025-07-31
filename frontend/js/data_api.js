@@ -1,36 +1,76 @@
 // data_api.js
-// Exposes a thin wrapper (window.electronAPI) that maps front‑end calls to your Python/Eel functions.
+// Exposes a thin wrapper (window.electronAPI) that maps front-end calls to your Python/Eel functions.
 
-// Wrapper for calling Python functions
-function fetchInfrastructureData() {
-  return eel.get_infrastructure_data()();
+// ─── Cache infra data so we only hit Eel once ───────────────────────────────
+let stationDataCache = null;
+
+/**
+ * Fetch all station data, caching the result.
+ */
+async function fetchInfrastructureData() {
+  if (!stationDataCache) {
+    stationDataCache = await eel.get_infrastructure_data()();
+  }
+  return stationDataCache;
 }
 
-// map Electron‑style calls to Eel
+// ─── Exposed API ─────────────────────────────────────────────────────────────
 window.electronAPI = {
-  getLocations:     () => eel.get_locations()(),
-  addNewLocation:   loc => eel.add_new_location(loc)(),
-  getAssetTypes:    () => eel.get_asset_types()(),
-  addNewAssetType:  at  => eel.add_new_asset_type(at)(),
-  getAssetTypeColor: at    => eel.get_asset_type_color_lookup(at)(),
-  setAssetTypeColor: (at,c) => eel.set_asset_type_color(at,c)(),
-  getAssetTypeColorForLocation: (at,loc) => eel.get_asset_type_color_for_location(at, loc)(),
-  setAssetTypeColorForLocation: (at, loc, c) => eel.set_asset_type_color_for_location(at, loc, c)(),
-  getStationData:   () => eel.get_infrastructure_data()(),
-  createNewStation: obj => eel.create_new_station(obj)(),
+  // — Lookups —
+  getLocations:           ()            => eel.get_locations()(),
+  addNewLocation:         loc           => eel.add_new_location(loc)(),
+  getAssetTypes:          ()            => eel.get_asset_types()(),
+  addNewAssetType:        at            => eel.add_new_asset_type(at)(),
+  getAssetTypeColor:      at            => eel.get_asset_type_color_lookup(at)(),
+  setAssetTypeColor:      (at, color)   => eel.set_asset_type_color(at, color)(),
 
-  getCompanies:     () => eel.get_companies()(),
-  addNewCompany: (name, active=false) => eel.add_new_company(name, active)(),
-  getActiveCompanies: () => eel.get_active_companies()(),
+  // — Location-specific color —
+  getAssetTypeColorForLocation: (at, loc)          => eel.get_asset_type_color_for_location(at, loc)(),
+  setAssetTypeColorForLocation: async (at, loc, color) => {
+    const res = await eel.set_asset_type_color_for_location(at, loc, color)();
+    if (res.success) stationDataCache = null;
+    return res;
+  },
 
-  getLocationsForCompany: (company) => eel.get_locations_for_company(company)(),
-  getAssetTypesForLocation: (company, location) => eel.get_asset_types_for_location(company, location)(),
-  addAssetTypeUnderLocation: (assetType, company, location) => eel.add_asset_type_under_location(assetType, company, location)(),
-  getActiveFilters: () => eel.get_active_filters()(),
-  addLocationUnderCompany: (company, location) => eel.add_location_under_company(location, company)(),
-  dataNuke:            () => eel.data_nuke()(),
-  getExcelSheetNames: b64 => eel.get_excel_sheet_names(b64)(),
-  importExcelSheet:   (b64, sheet, location, assetType) => eel.import_excel_sheet(b64, sheet, location, assetType)(),
+  // — Station data —
+  getStationData:         ()            => fetchInfrastructureData(),
+  createNewStation:       async obj      => {
+    const res = await eel.create_new_station(obj)();
+    if (res.success) stationDataCache = null;
+    return res;
+  },
 
+  // — Company & filters —
+  getCompanies:                ()                      => eel.get_companies()(),
+  addNewCompany:               (name, active = false) => eel.add_new_company(name, active)(),
+  getActiveCompanies:          ()                      => eel.get_active_companies()(),
+  getLocationsForCompany:      company                 => eel.get_locations_for_company(company)(),
+  getAssetTypesForLocation:    (company, location)     => eel.get_asset_types_for_location(company, location)(),
+  addAssetTypeUnderLocation:   (assetType, company, location) =>
+                                eel.add_asset_type_under_location(assetType, company, location)(),
+  getActiveFilters:            ()                      => eel.get_active_filters()(),
+  addLocationUnderCompany:     (company, location)     => eel.add_location_under_company(location, company)(),
+
+  // — Excel import —
+  getExcelSheetNames:          b64                     => eel.get_excel_sheet_names(b64)(),
+  importExcelSheet:            async (b64, sheet, location, assetType) => {
+    const res = await eel.import_excel_sheet(b64, sheet, location, assetType)();
+    if (res.success) stationDataCache = null;
+    return res;
+  },
+
+  // — Edit station details —
+  saveStationDetails:         async obj   => {
+    const res = await eel.save_station_details(obj)();
+    if (res.success) stationDataCache = null;
+    return res;
+  },
+  deleteStation:              async id    => {
+    const res = await eel.delete_station(id)();
+    if (res.success) stationDataCache = null;
+    return res;
+  },
+
+  // — Nuke everything —
+  dataNuke:                   ()            => eel.data_nuke()()
 };
-

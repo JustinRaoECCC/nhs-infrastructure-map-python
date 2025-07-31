@@ -1,7 +1,9 @@
 // frontend/js/station.js
 
 let unlocked = false;
+let stationSnippet = null;
 let currentStation = null;
+let lastActiveView = null;
 
 // ─── Wire up all of the station‑detail buttons/handlers after the snippet is injected ───
 function wireUpStationEventHandlers() {
@@ -60,26 +62,28 @@ function wireUpStationEventHandlers() {
     deleteStation();
   });
 
-  // ── Auto‑relock on unload ─────────────────────────────────────────────────
-  console.log('   ⚙️ binding beforeunload auto‑relock');
-  window.addEventListener('beforeunload', () => {
-    if (unlocked) {
-      console.log('   🔒 Auto‑relocking on unload');
-      toggleEditing(true);
-    }
-  });
-
   console.log('🔧 wireUpStationEventHandlers completed');
 }
 
 
 // Load & render station details
 async function loadStationPage(stationId) {
-  // reset UI
+  // 1) Inject the HTML snippet (cache it on first load)
+  const container = document.getElementById('stationContentContainer');
+  if (container) {
+    if (!stationSnippet) {
+      stationSnippet = await fetch('station_snippet.html').then(r => r.text());
+    }
+    container.innerHTML = stationSnippet;
+  }
+
+  // 2) Reset UI state
   unlocked = false;
+  const unlockBtn = document.getElementById('unlockEditing');
+  if (unlockBtn) unlockBtn.textContent = '🔒 Unlock Editing';
+  const secCt = document.getElementById('stationSectionsContainer');
+  if (secCt) secCt.innerHTML = '';
   toggleInputs(false);
-  document.getElementById('unlockEditing').textContent = '🔒 Unlock Editing';
-  document.getElementById('stationSectionsContainer').innerHTML = '';
 
   const data = await eel.get_infrastructure_data()();
   const stn = data.find(s => s.station_id === stationId);
@@ -109,10 +113,28 @@ async function loadStationPage(stationId) {
     document.getElementById('stationSectionsContainer').append(block);
   });
 
-  // show view
+  // remember which view we’re coming from
+  const mapEl  = document.getElementById('mapContainer');
+  const listEl = document.getElementById('listContainer');
+  if (listEl && getComputedStyle(listEl).display !== 'none') {
+    lastActiveView = 'list';
+  } else if (mapEl && getComputedStyle(mapEl).display !== 'none') {
+    lastActiveView = 'map';
+  }
+
+  // 3) Show the station-page pane
   document.getElementById('stationContentContainer').style.display = 'block';
-  document.getElementById('mapContainer').style.display = 'none';
-  document.getElementById('rightPanel').style.display = 'none';
+
+  // 4) Hide only the other panels (filters, map/list, dashboard, inventor, right‐panel)
+  ['mapContainer','listContainer','dashboardContentContainer','inventorContentContainer'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const rightPanel = document.getElementById('rightPanel');
+  if (rightPanel) rightPanel.style.display = 'none';
+  const filters = document.querySelector('.left-panel');
+  if (filters) filters.style.display = 'none';
+
 
   // ─── Now that the HTML is in the DOM, wire up all our event handlers ───
   wireUpStationEventHandlers();
@@ -122,7 +144,10 @@ async function loadStationPage(stationId) {
 function toggleInputs(on) {
   // only lock/unlock the general‑info inputs
   ['giStationId','giCategory','giSiteName','giProvince','giLatitude','giLongitude','giStatus']
-    .forEach(id => document.getElementById(id).disabled = !on);
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !on;
+    });
   // note: we no longer disable any of the section‑editing buttons here
 }
 
@@ -288,9 +313,38 @@ async function deleteStation() {
 }
 
 function hideStationView() {
+  // 1) Hide the station detail pane
   document.getElementById('stationContentContainer').style.display = 'none';
-  document.getElementById('mapContainer').style.display = '';
-  document.getElementById('rightPanel').style.display = '';
+
+  // 2) Show filters
+  const filters = document.querySelector('.left-panel');
+  if (filters) filters.style.display = '';
+
+  // 3) Restore only the view you were on
+  const mapEl  = document.getElementById('mapContainer');
+  const listEl = document.getElementById('listContainer');
+
+  if (lastActiveView === 'list') {
+    listEl.style.display = '';
+    mapEl.style.display  = 'none';
+  } else { // default back to map
+    mapEl.style.display  = '';
+    listEl.style.display = 'none';
+  }
+
+  // 4) Force a leaflet resize if needed
+  setTimeout(() => map.invalidateSize(), 0);
+
+  // 5) Hide dashboard & inventory containers
+  const dashEl = document.getElementById('dashboardContentContainer');
+  if (dashEl) dashEl.style.display = 'none';
+
+  const invEl = document.getElementById('inventorContentContainer');
+  if (invEl) invEl.style.display = 'none';
+
+  // 6) Always show the right‐hand details panel
+  const rightPanel = document.getElementById('rightPanel');
+  if (rightPanel) rightPanel.style.display = '';
 }
 
 // expose

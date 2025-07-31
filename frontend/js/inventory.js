@@ -11,12 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Content containers
   const inventorPlaceholder   = document.getElementById('inventorContentContainer');
   const mapContainer          = document.getElementById('mapContainer');
+  const listContainer         = document.getElementById('listContainer');
   const rightPanel            = document.getElementById('rightPanel');
   const dashPlaceholder       = document.getElementById('dashboardContentContainer');
   const stationPlaceholder    = document.getElementById('stationContentContainer');
 
   function hideAllViews() {
     mapContainer.style.display        = 'none';
+    listContainer.style.display       = 'none';
     rightPanel.style.display          = 'none';
     dashPlaceholder.style.display     = 'none';
     stationPlaceholder.style.display  = 'none';
@@ -40,16 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
     hideAllViews();
     mapContainer.style.display = '';
     rightPanel.style.display   = '';
+    setTimeout(() => map.invalidateSize(), 0);
   });
 
-  // List View (if implemented)
-  if (btnListView) {
-    btnListView.addEventListener('click', e => {
-      e.preventDefault();
-      hideAllViews();
-      // TODO: show list view container here
-    });
-  }
+  // List View (in‐page panel)
+  btnListView.addEventListener('click', e => {
+    e.preventDefault();
+    hideAllViews();
+    listContainer.style.display = '';
+    rightPanel.style.display   = '';
+  });
 
   // Dashboard View
   btnDashboardView.addEventListener('click', e => {

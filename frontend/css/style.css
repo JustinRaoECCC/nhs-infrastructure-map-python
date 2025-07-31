@@ -821,3 +821,78 @@ body, html {
   box-shadow: 0 2px 6px rgba(0,0,0,.15);
   z-index: 1000;
 }
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* List View                                                               */
+/* ───────────────────────────────────────────────────────────────────────── */
+.list-container {
+  flex-grow: 1;
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px;
+  background-color: #fff;
+}
+
+/* Station list table styling */
+#stationTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+#stationTable th,
+#stationTable td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* Sticky header row */
+#stationTable th {
+  background-color: #f2f2f2;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* Hover effect on rows */
+#stationTable tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+#stationTable tbody tr:hover {
+  background-color: #f0f8ff;
+}
+
+/* Utility class to hide elements if needed */
+.hidden {
+  display: none !important;
+}
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Group row styles (if you add grouping later)                             */
+/* ───────────────────────────────────────────────────────────────────────── */
+.province-group-row th {
+  background: #dde4ea;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.category-group-row th {
+ background: #f2efe7;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Station-data-row hover styling                                           */
+/* ───────────────────────────────────────────────────────────────────────── */
+.station-data-row {
+  cursor: pointer;
+}
+.station-data-row:hover {
+  background: #eef4ff;
+}
