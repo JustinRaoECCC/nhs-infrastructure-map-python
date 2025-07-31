@@ -896,3 +896,39 @@ body, html {
 .station-data-row:hover {
   background: #eef4ff;
 }
+
+/* bottom of your style.css */
+#loaderOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: none;              /* toggled by JS */
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.station-loading-bar {
+  width: 300px;
+  max-width: 80%;
+  height: 8px;
+  background: #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.station-loading-fill {
+  width: 0;
+  height: 100%;
+  background-color: #00d632;
+  animation: fill-bar 14s ease-in-out forwards;
+}
+
+@keyframes fill-bar {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}

@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     hideAllViews();
     listContainer.style.display = '';
-    rightPanel.style.display   = '';
+    rightPanel.style.display    = '';
   });
 
   // Dashboard View
