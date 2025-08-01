@@ -43,10 +43,6 @@ function showStationDetails(stn) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // 1) Build the filter tree (reuses filters.js)
-  if (typeof buildFilterTree === 'function') {
-    await buildFilterTree();
-  }
 
   // 2) Load and render the station list
   const data = await window.electronAPI.getStationData();

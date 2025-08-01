@@ -17,9 +17,18 @@ Follow these instructions to be able to use the application on your device.
 
 
 
+Recent updates:
+- Implemented List View
+- Algorithm plan
 
 
+Current bugs/What I am working on:
+- Brainstorming for how the algorithm will work, and what the best way to display the dashboard interface is
+- Tomorrow I will build the dashboard to test the algorithm ideas I came up with
 
+TODO:
+- Fix mini bugs mentioned in my notes
+- Impliment Repairs, Inspection History, Photos, Documents, Construction History, Materials
 
 
 
