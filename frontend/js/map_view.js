@@ -1,71 +1,38 @@
 // map_view.js
-// Initializes the Leaflet map, loads station data, places markers, and handles station‑details popups.
+// Initializes the Leaflet map, loads station data, places markers, and handles station-details popups.
 
 window.addEventListener('unload', () => {});
 
-// ─── Data fetch helper ──────────────────────────────────────────────────────
-/**
- * Fetch station data from the Python backend via Eel.
- */
-async function fetchInfrastructureData() {
-  return await eel.get_infrastructure_data()();
+// ─── In-memory cache of all station data ─────────────────────────────────
+let mapStationData = [];
+
+// (optional) initial loader if you still want it elsewhere
+async function initializeData() {
+  mapStationData = await eel.get_infrastructure_data()();
 }
-
-window.addEventListener('pageshow', event => {
-  if (event.persisted) {
-    console.log('🔄 Restored from bfcache – reloading to re-open eel socket');
-    window.location.reload();
-  }
-});
-
-
-// ─── Re‑init on back/forward cache *or* when the window regains focus ────
-function reinitMapAndFilters() {
-  console.log('🔄 [map_view] reinitMapAndFilters()');
-  // clear and redraw markers
-  markersLayer.clearLayers();
+initializeData().then(() => {
+  console.log('🔷 [map_view] station data loaded, drawing initial markers');
   window.refreshMarkers();
-  // clear and rebuild filters (filters.js’s buildFilterTree already does the clear)
-  if (typeof window.buildFilterTree === 'function') {
-    console.log('🔄 [map_view] rebuild filter tree');
-    window.buildFilterTree();
-  }
-}
-
-// when Chrome/Firefox restores from the bfcache…
-window.addEventListener('pageshow', event => {
-  console.log(`📡 [map_view] pageshow fired; persisted=${event.persisted}`);
-  if (event.persisted) {
-    reinitMapAndFilters();
-  }
 });
 
-
-// also whenever the user’s focus returns here (e.g. via history.back, tab switch, etc.)
-window.addEventListener('focus', () => {
-  console.log('👀 [map_view] window focus fired');
-  reinitMapAndFilters();
-});
-
-
-// Initialize Leaflet map
+// ─── Initialize Leaflet map ────────────────────────────────────────────────
 const map = L.map('map', {
-    // lock panning to the world’s [-90, -180] → [90, 180] bounds
-    maxBounds: [[-90, -180], [90, 180]],
-    // bounce back immediately at the edge
-    maxBoundsViscosity: 1.0
-  }).setView([54.5, -119], 5);
+  // lock panning to the world’s [-90, -180] → [90, 180] bounds
+  maxBounds: [[-90, -180], [90, 180]],
+  // bounce back immediately at the edge
+  maxBoundsViscosity: 1.0
+}).setView([54.5, -119], 5);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors',
-  noWrap: true    // ← prevent horizontal repetition
+  noWrap: true // ← prevent horizontal repetition
 }).addTo(map);
 
 // ─── Grey out the “un‐scrollable” area in light grey ─────────────────────────
 {
   const bounds = map.options.maxBounds;
-  const sw     = bounds.getSouthWest();
-  const ne     = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
 
   // huge outer ring, covers everything
   const outer = [
@@ -92,61 +59,63 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   }).addTo(map);
 }
 
-// ─── Marker layer + refresh fn ─────────────────────────────────────────────
+// ─── Marker layer ──────────────────────────────────────────────────────────
 const markersLayer = L.layerGroup().addTo(map);
 
-/**
- * Fetch all stations and redraw the markersLayer.
- */
-window.refreshMarkers = function() {
+// ─── Helper: read which filters are checked ───────────────────────────────
+function getActiveFilters() {
+  const locations = Array.from(
+    document.querySelectorAll('.filter-checkbox.location:checked')
+  ).map(cb => cb.value);
+  const assetTypes = Array.from(
+    document.querySelectorAll('.filter-checkbox.asset-type:checked')
+  ).map(cb => cb.value);
+  return { locations, assetTypes };
+}
+
+// Always re-fetch & redraw
+window.refreshMarkers = async function() {
+  // 1) pull fresh data
+  mapStationData = await eel.get_infrastructure_data()();
+
+  // 2) clear & draw
   markersLayer.clearLayers();
+  const { locations: activeLocations, assetTypes: activeAssetTypes } = getActiveFilters();
 
-  fetchInfrastructureData().then(data => {
-    data.forEach(stn => {
-      const color = stn.color;
+  mapStationData.forEach(stn => {
+    if (!activeLocations.includes(stn.province))   return;
+    if (!activeAssetTypes.includes(stn.asset_type)) return;
 
-      // build marker + popup link
-      const marker = L.marker([stn.lat, stn.lon], {
-        icon: createColoredIcon(color)
-      })
-        .addTo(map)
-      .bindPopup(
-        `<a href="#" class="popup-link" data-id="${stn.station_id}">
-            ${stn.name}
-        </a>`
-      );
-
-      // icon clicks open RHS view; clicks on the link itself only navigate
-      marker.on('click', (e) => {
-        if (e.originalEvent && e.originalEvent.target.tagName === 'A') {
-          // let the <a> do its default navigation
-          return;
-        }
-        marker.openPopup();
-        showStationDetails(stn);
-      });
+    const marker = L.marker([stn.lat, stn.lon], {
+      icon: createColoredIcon(stn.color)
+    })
+      .addTo(markersLayer)
+      .bindPopup(`<a href="#" class="popup-link" data-id="${stn.station_id}">${stn.name}</a>`);
+    marker.on('click', e => {
+      if (e.originalEvent && e.originalEvent.target.tagName === 'A') return;
+      marker.openPopup();
+      showStationDetails(stn);
     });
   });
 };
 
-// initial population
-console.log('🔷 [map_view] initial refreshMarkers()')
+// initial draw
+console.log('🔷 [map_view] initial refreshMarkers()');
 window.refreshMarkers();
 
-
-// Helper: fill in the RHS pane
+// ─── Helper: fill in the RHS pane ─────────────────────────────────────────
 function showStationDetails(stn) {
   const container = document.getElementById('station-details');
 
   // 1) fixed fields (General Information)
   const fixedOrder = [
-    ['Station ID',       stn.station_id],
-    ['Category',         stn.asset_type],
-    ['Site Name',        stn.name],
-    ['Province',         stn.province],
-    ['Latitude',         stn.lat],
-    ['Longitude',        stn.lon],
-    ['Status',           stn.status],
+    ['Station ID', stn.station_id],
+    ['Category',   stn.asset_type],
+    ['Site Name',  stn.name],
+    ['Province',   stn.province],
+    ['Latitude',   stn.lat],
+    ['Longitude',  stn.lon],
+    ['Status',     stn.status]
   ];
 
   // 2) collect “extra” keys that use the “Section – Field” pattern
@@ -191,6 +160,6 @@ function createColoredIcon(color) {
     // leave all layout/CSS in style.css; only set the color via a CSS var
     html: `<span class="marker-dot" style="--marker-color:${color}"></span>`,
     iconSize: [12, 12],
-    iconAnchor: [6, 6],
+    iconAnchor: [6, 6]
   });
 }

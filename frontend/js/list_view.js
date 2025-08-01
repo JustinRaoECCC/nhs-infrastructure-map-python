@@ -44,63 +44,78 @@ function showStationDetails(stn) {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-  // 2) Load and render the station list
-  const data = await window.electronAPI.getStationData();
-  // sort A→Z by site name
-  data.sort((a, b) => {
-    const n1 = (a.name || '').toLowerCase();
-    const n2 = (b.name || '').toLowerCase();
-    return n1.localeCompare(n2);
-  });
-
+  // ─── Show-in-List toggle ─────────────────────────────────────────────────
+  const chkShowList = document.getElementById('chkShowList');
   const tbody = document.querySelector('#stationTable tbody');
-  tbody.innerHTML = '';
 
-  data.forEach(stn => {
-    const tr = document.createElement('tr');
-    tr.style.cursor = 'pointer';
+  // ─── Helper: read which filters are checked ────────────────────────────
+  function getActiveFilters() {
+    const locations = Array.from(
+      document.querySelectorAll('.filter-checkbox.location:checked')
+    ).map(cb => cb.value);
+    const assetTypes = Array.from(
+      document.querySelectorAll('.filter-checkbox.asset-type:checked')
+    ).map(cb => cb.value);
+    return { locations, assetTypes };
+  }
 
-    // helper to create td
-    function td(text, innerHTML) {
-      const cell = document.createElement('td');
-      if (innerHTML) cell.innerHTML = innerHTML;
-      else cell.textContent = text != null ? text : '';
-      return cell;
-    }
 
-    tr.appendChild(td(stn.station_id));
-    tr.appendChild(td(stn.asset_type));
-    // Site Name as blue underlined link
-    const linkHTML = `<a href="#" class="station-link" data-id="${stn.station_id}"
-                          style="color:blue; text-decoration:underline;">
-                        ${stn.name}
-                      </a>`;
-    tr.appendChild(td(null, linkHTML));
-    tr.appendChild(td(stn.lat));
-    tr.appendChild(td(stn.lon));
-    tr.appendChild(td(stn.status));
+  // ─── Show-in-List rendering ──────────────────────────────────────────────
+  async function renderList() {
+    const tbody = document.querySelector('#stationTable tbody');
+    tbody.innerHTML = '';
 
-    // On hover, update the RHS details
-    tr.addEventListener('mouseover', () => {
-      if (typeof showStationDetails === 'function') {
-        showStationDetails(stn);
-      } else {
-        // fallback: use station.js’s loadStationPage snippet to fill details
-        // here we just call it into the details div
-        // (assumes station.js wired up the same showStationDetails)
-      }
-    });
+    // Fetch all station data
+    const data = await window.electronAPI.getStationData();
 
-    // Clicking the link navigates to the full station page
-    tr.querySelector('.station-link').addEventListener('click', e => {
-      e.preventDefault();
-      const sid = e.currentTarget.getAttribute('data-id');
-      // station.js exposes loadStationPage
-      if (typeof loadStationPage === 'function') {
-        loadStationPage(sid);
-      }
-    });
+    // Determine which locations and asset-types are checked
+    const activeLocations = Array.from(
+      document.querySelectorAll('.filter-checkbox.location:checked')
+    ).map(cb => cb.value);
+    const activeAssetTypes = Array.from(
+      document.querySelectorAll('.filter-checkbox.asset-type:checked')
+    ).map(cb => cb.value);
 
-    tbody.appendChild(tr);
-  });
+    // Filter, sort, and render rows
+    data
+      .filter(stn =>
+        activeLocations.includes(stn.province) &&
+        activeAssetTypes.includes(stn.asset_type)
+      )
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .forEach(stn => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = `
+          <td>${stn.station_id}</td>
+          <td>${stn.asset_type}</td>
+          <td>
+            <a href="#" class="station-link" data-id="${stn.station_id}"
+               style="color:blue; text-decoration:underline;">
+              ${stn.name}
+            </a>
+          </td>
+          <td>${stn.lat}</td>
+          <td>${stn.lon}</td>
+          <td>${stn.status}</td>
+        `;
+        // Hover to update RHS details
+        tr.addEventListener('mouseover', () => showStationDetails(stn));
+        // Click link to open full station page
+        tr.querySelector('.station-link').addEventListener('click', e => {
+          e.preventDefault();
+          loadStationPage(stn.station_id);
+        });
+        tbody.appendChild(tr);
+      });
+  }
+
+  // Initial population of the list
+  renderList();
+
+  // Re-render whenever any filter checkbox changes
+  document.getElementById('filterTree')
+          .addEventListener('change', renderList);
+  
+  window.renderList = renderList;
 });

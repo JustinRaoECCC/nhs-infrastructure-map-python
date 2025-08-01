@@ -56,10 +56,65 @@
       </div>
     </div>
 
-
     <!-- 3) Optimization -->
     <div id="optimization" class="dashboard-content">
       <div class="opt-container">
         <button id="optimizeBtn">Optimize Workplan</button>
+      </div>
+    </div>
+
+    <!-- Add Parameter Modal -->
+    <div id="addParamModal" class="modal" style="display:none;">
+      <div class="modal-content" style="width:400px; max-width:90%;">
+        <span class="close-modal" id="closeAddParamModal">&times;</span>
+        <h2 class="modal-header">Add New Parameter</h2>
+
+        <div style="margin-top:1em;">
+          <label>Parameter Name</label><br/>
+          <input type="text" id="paramNameInput"
+                placeholder="Enter name"
+                style="width:100%; padding:0.5em;"/>
+        </div>
+
+        <div style="margin-top:1em;">
+          <label>Condition Type</label><br/>
+          <select id="paramConditionSelect"
+                  style="width:100%; padding:0.5em;">
+            <option value="n/a">n/a</option>
+            <option value="IF">IF</option>
+            <option value="WHILE">WHILE</option>
+          </select>
+        </div>
+
+        <div style="margin-top:1em;">
+          <label>Max Weight (1–Y)</label><br/>
+          <input type="number" id="paramMaxWeight"
+                min="1" value="3"
+                style="width:100%; padding:0.5em;"/>
+        </div>
+
+        <div id="optionsContainer" style="margin-top:1em;">
+          <h3>Options → Weight</h3>
+          <button type="button" id="addOptionBtn"
+                  style="margin-bottom:0.5em;">+ Add Option</button>
+          <div id="optionsList"></div>
+        </div>
+
+        <!-- inside the <div id="addParamModal" …>, after your Options container -->
+        <div style="margin-top:1em;">
+          <h3>Applies To</h3>
+          <div id="paramAssetFilter" style="max-height:200px; overflow:auto;
+              border:1px solid #ccc; padding:0.5em;"></div>
+        </div>
+
+        <div style="margin-top:1.5em; text-align:right;">
+          <button id="saveParamBtn" style="padding:0.5em 1em;">
+            Save Parameter
+          </button>
+          <button id="cancelParamBtn" style="padding:0.5em 1em;
+                                          margin-left:0.5em;">
+            Cancel
+          </button>
+        </div>
       </div>
     </div>

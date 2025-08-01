@@ -43,15 +43,16 @@ async function buildFilterTree() {
       const assetTypes = await window.electronAPI.getAssetTypesForLocation(company, location);
 
       for (const assetType of assetTypes) {
-        if (assetType && assetType.toLowerCase() === 'sheet') continue;
-        // Wrap each asset‑type in its own header + menu button
-        const wrapper = document.createElement('div');
-        wrapper.classList.add('collapsible-wrapper', 'asset-type-wrapper');
+        if (assetType.toLowerCase() === 'sheet') continue;
+        // reuse the same factory so we get a checkbox + cascade behavior:\
 
-        const header = document.createElement('div');
-        header.classList.add('collapsible-header');
+        const assetWrapper = createCollapsibleItem(assetType, 'asset-type', location);
+        // ── store the company on each asset‐type checkbox ──
+        const chk = assetWrapper.querySelector('input.filter-checkbox.asset-type');
+        if (chk) chk.dataset.company = company;
 
-        // 1) three‑dots “⋮” menu button
+        // append your color-picker menu and title click exactly where you did before:
+        const header = assetWrapper.querySelector('.collapsible-header');
         const menuBtn = document.createElement('button');
         menuBtn.classList.add('asset-type-menu-button');
         menuBtn.textContent = '⋮';
@@ -59,19 +60,11 @@ async function buildFilterTree() {
           e.stopPropagation();
           openAssetTypeColorMenu(assetType, location, menuBtn);
         });
+        // insert the menu button before the title:
+        header.insertBefore(menuBtn, header.querySelector('.collapsible-title'));
 
-        // 2) title opens Add‑Infra modal
-        const titleSpan = document.createElement('span');
-        titleSpan.classList.add('collapsible-title');
-        titleSpan.textContent = assetType;
-        titleSpan.addEventListener('click', () =>
-          openAddInfrastructureModal(company, location, assetType)
-        );
-
-        header.appendChild(menuBtn);
-        header.appendChild(titleSpan);
-        wrapper.appendChild(header);
-        locationDiv.querySelector('.collapsible-content').appendChild(wrapper);
+        locationDiv.querySelector('.collapsible-content')
+                   .appendChild(assetWrapper);
       }
 
       companyDiv.querySelector('.collapsible-content').appendChild(locationDiv);
@@ -90,6 +83,26 @@ function createCollapsibleItem(title, type, parentCompany = null) {
 
   const header = document.createElement('div');
   header.classList.add('collapsible-header');
+
+  // ─── checkbox to toggle this filter on/off ───────────────────
+  const chk = document.createElement('input');
+  chk.type = 'checkbox';
+  chk.classList.add('filter-checkbox', type);
+  chk.value = title;
+
+  if (type === 'asset-type') {
+    // parentCompany here is actually the location string
+    chk.dataset.location = parentCompany;
+  }
+
+  chk.checked = true;
+
+  // ─── prevent collapse/expand when clicking the checkbox ─────────────────
+  chk.addEventListener('click', e => {
+    e.stopPropagation();
+  });
+
+  header.appendChild(chk);
 
   const toggleBtn = document.createElement('button');
   toggleBtn.classList.add('toggle-collapse-button');
@@ -142,6 +155,15 @@ function createCollapsibleItem(title, type, parentCompany = null) {
 
   header.appendChild(toggleBtn);
   header.appendChild(titleSpan);
+
+  // ─── cascade check/uncheck down to all grandchildren ────────────────
+  chk.addEventListener('change', () => {
+    const allDescendants = wrapper.querySelectorAll('input.filter-checkbox');
+    allDescendants.forEach(box => box.checked = chk.checked);
+    if (window.refreshMarkers) window.refreshMarkers();
+    if (window.renderList)     window.renderList();
+  });
+
   wrapper.appendChild(header);
   wrapper.appendChild(content);
 
@@ -155,6 +177,16 @@ function openAddInfrastructureModal(company, location, assetType) {
 // On startup, load the full filter tree (companies → locations → asset‐types)
 document.addEventListener('DOMContentLoaded', async () => {
   await buildFilterTree();
+
+  // ─── now that filters exist, draw map & list once ───────────────────────
+  if (window.refreshMarkers) {
+    console.log('🔷 [filters.js] initial map draw');
+    window.refreshMarkers();
+  }
+  if (window.renderList) {
+    console.log('🔷 [filters.js] initial list draw');
+    window.renderList();
+  }
 });
 
 function buildFilterTreeFromData(data) {

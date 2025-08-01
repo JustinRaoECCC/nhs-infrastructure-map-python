@@ -246,9 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.success) {
         alert(`Import failed: ${res.message}`);
       } else {
-        // on success: close modal + refresh markers
+        // on success: close modal, rebuild filters, then refresh markers
         closeModal();
-        if (window.refreshMarkers) window.refreshMarkers();
+        if (window.buildFilterTree) {
+          await window.buildFilterTree();
+        }
+        if (window.refreshMarkers) {
+          window.refreshMarkers();
+        }
       }
     } catch (err) {
       console.error(err);
