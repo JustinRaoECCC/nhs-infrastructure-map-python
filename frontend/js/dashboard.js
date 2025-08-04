@@ -1,5 +1,10 @@
 // frontend/js/dashboard.js
 document.addEventListener('DOMContentLoaded', () => {
+
+  // Hide the grey table entirely (we’ll render params above the buttons)
+  const table = document.querySelector('#paramsTable');
+  if (table) table.style.display = 'none';
+
   const btnDashboard       = document.getElementById('btn-dashboard-view');
   const btnMapView         = document.getElementById('btn-map-view');
   const mapContainer       = document.getElementById('mapContainer');
@@ -29,34 +34,32 @@ document.addEventListener('DOMContentLoaded', () => {
     mapContainer.style.display       = '';
     rightPanel.style.display         = '';
   });
-  btnDashboard.addEventListener('click', e => { e.preventDefault(); showDashboard(); });
+  btnDashboard.addEventListener('click', e => {
+    e.preventDefault();
+    showDashboard();
+  });
 
   // ─── Initialize Dashboard UI ───────────────────────────────────────────────
   async function initDashboardUI() {
     // ─── Elements ─────────────────────────────────────────────────────────────
-    // Tabs
-    const tabs     = document.querySelectorAll('.dashboard-tab');
-    const contents = document.querySelectorAll('.dashboard-content');
-    // Parameter editor (left side)
-    const paramContainer    = document.querySelector('#paramContainer');
-    const statsDiv          = document.querySelector('#paramStats');
-    const addBtn            = document.querySelector('#addParamBtn');
-    const saveParamsBtn     = document.querySelector('#saveParamsBtn');
-    // Read-only parameter list (bottom pane)
-    const paramsTableBody   = document.querySelector('#paramsTable tbody');
-    // Add-Parameter modal
-    const addParamModal     = document.querySelector('#addParamModal');
-    const closeModalBtn     = document.querySelector('#closeAddParamModal');
-    const cancelParamBtn    = document.querySelector('#cancelParamBtn');
-    const saveParamBtn      = document.querySelector('#saveParamBtn');
-    const paramNameInput    = document.querySelector('#paramNameInput');
-    const paramConditionSel = document.querySelector('#paramConditionSelect');
-    const paramMaxWeightInp = document.querySelector('#paramMaxWeight');
-    const addOptionBtn      = document.querySelector('#addOptionBtn');
-    const optionsList       = document.querySelector('#optionsList');
-    // New: Applies-To filter clone
-    const paramAssetFilter  = document.querySelector('#paramAssetFilter');
-    const filterTree        = document.getElementById('filterTree');
+    const tabs               = document.querySelectorAll('.dashboard-tab');
+    const contents           = document.querySelectorAll('.dashboard-content');
+    const paramContainer     = document.querySelector('#paramContainer');
+    const statsDiv           = document.querySelector('#paramStats');
+    const addBtn             = document.querySelector('#addParamBtn');
+    const saveParamsBtn      = document.querySelector('#saveParamsBtn');
+    const paramsTableBody    = document.querySelector('#paramsTable tbody');
+    const addParamModal      = document.querySelector('#addParamModal');
+    const closeModalBtn      = document.querySelector('#closeAddParamModal');
+    const cancelParamBtn     = document.querySelector('#cancelParamBtn');
+    const saveParamBtn       = document.querySelector('#saveParamBtn');
+    const paramNameInput     = document.querySelector('#paramNameInput');
+    const paramConditionSel  = document.querySelector('#paramConditionSelect');
+    const paramMaxWeightInp  = document.querySelector('#paramMaxWeight');
+    const addOptionBtn       = document.querySelector('#addOptionBtn');
+    const optionsList        = document.querySelector('#optionsList');
+    const paramAssetFilter   = document.querySelector('#paramAssetFilter');
+    const filterTree         = document.getElementById('filterTree');
 
     // ─── Tab switching ─────────────────────────────────────────────────────────
     tabs.forEach(tab => {
@@ -69,25 +72,50 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // ─── Helpers for building rows ─────────────────────────────────────────────
-    function makeRow(parameter = '', weight = 1) {
+    // ─── Helpers: build a display‐row for saved parameters ───────────────────────
+    function makeDisplayRow({ parameter, condition, options }) {
       const row = document.createElement('div');
       row.className = 'param-row';
       row.innerHTML = `
-        <input type="text" class="param-name"
-              placeholder="Parameter name" value="${parameter}" />
-        <select class="param-weight"></select>
+        <input type="text" class="param-name" value="${parameter}" disabled />
+        <select class="param-condition" disabled>
+          <option value="${condition}" selected>${condition}</option>
+        </select>
+        <select class="param-options"></select>
+        <span class="param-weight-display"></span>
         <button class="deleteParamBtn">×</button>
       `;
-      const weightSel = row.querySelector('.param-weight');
-      for (let i = 1; i <= 10; i++) {
+
+
+      // fill & disable condition dropdown
+      const condSel = row.querySelector('.param-condition');
+      ['n/a','IF','WHILE'].forEach(optVal => {
         const opt = document.createElement('option');
-        opt.value = opt.textContent = i;
-        if (i === weight) opt.selected = true;
-        weightSel.appendChild(opt);
+        opt.value = opt.textContent = optVal;
+        if (optVal === condition) opt.selected = true;
+        condSel.appendChild(opt);
+      });
+      condSel.disabled = true;
+
+      // populate the new options dropdown and wire up the weight display
+      const optSel = row.querySelector('.param-options');
+      const weightDisplay = row.querySelector('.param-weight-display');
+      options.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.weight;
+        opt.textContent = o.label;
+        optSel.appendChild(opt);
+      });
+      // initialize display to first option’s weight
+      if (options.length) {
+        weightDisplay.textContent = options[0].weight;
       }
+      optSel.addEventListener('change', () => {
+        weightDisplay.textContent = optSel.value;
+      });
+
       row.querySelector('.deleteParamBtn')
-        .addEventListener('click', () => row.remove());
+         .addEventListener('click', () => row.remove());
       return row;
     }
 
@@ -101,20 +129,41 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     }
 
-    // ─── Load existing parameters into editor ─────────────────────────────────
+    // ─── Load existing parameters into the display panel ───────────────────────
     const existing = await eel.get_algorithm_parameters()();
-    existing.forEach(e => paramContainer.appendChild(makeRow(e.parameter, e.weight)));
-    renderParamStats(existing);
+    // clear any old content
+    statsDiv.innerHTML = '';
+    paramContainer.innerHTML = '';
 
-    // ─── Option-to-Weight row builder for the modal ─────────────────────────────
+    // Group the flat rows by parameter+condition → build one dropdown entry per group
+    const grouped = {};
+    existing.forEach(e => {
+      const key = `${e.parameter}||${e.condition}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          parameter: e.parameter,
+          condition: e.condition,
+          options: []
+        };
+      }
+      grouped[key].options.push({ label: e.option, weight: e.weight });
+    });
+
+    // Now render one row per parameter group
+    Object.values(grouped).forEach(grp => {
+      const row = makeDisplayRow(grp);
+      paramContainer.appendChild(row);
+    });
+
+    // ─── Helpers: build an option row inside modal ─────────────────────────────
     function makeOptionRow(label = '', weight = 1) {
       const row = document.createElement('div');
       row.className = 'option-row';
       row.style = 'display:flex; align-items:center; margin-top:0.5em;';
       row.innerHTML = `
         <input type="text" class="option-name"
-              placeholder="Option label"
-              style="flex:1; margin-right:0.5em;" />
+               placeholder="Option label"
+               style="flex:1; margin-right:0.5em;" />
         <select class="option-weight"
                 style="width:5em; margin-right:0.5em;"></select>
         <button class="deleteOptionBtn" style="color:red;">×</button>
@@ -124,7 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const deleteBtn    = row.querySelector('.deleteOptionBtn');
 
       nameInput.value = label;
-
       function populateWeights() {
         const max = Math.max(1, parseInt(paramMaxWeightInp.value) || 1);
         weightSelect.innerHTML = '';
@@ -137,12 +185,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       paramMaxWeightInp.addEventListener('change', populateWeights);
       populateWeights();
-
       deleteBtn.addEventListener('click', () => row.remove());
       return row;
     }
 
-    // ─── Populate “Applies To” filter by cloning the left-tree checkboxes ───────
+    // ─── Populate “Applies To” by cloning filter-tree asset-type checkboxes ────
     function populateParamAssetFilter() {
       paramAssetFilter.innerHTML = '';
       filterTree.querySelectorAll('.filter-checkbox.asset-type').forEach(box => {
@@ -167,25 +214,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // ─── “+ Add Option” in modal ───────────────────────────────────────────────
+    // ─── Add new Option row in modal ──────────────────────────────────────────
     addOptionBtn.addEventListener('click', () => {
       optionsList.appendChild(makeOptionRow());
     });
 
-    // ─── Open Add-Parameter modal ──────────────────────────────────────────────
+    // ─── Open the Add-Parameter modal ─────────────────────────────────────────
     addBtn.addEventListener('click', () => {
-      // reset form fields
       paramNameInput.value    = '';
       paramConditionSel.value = 'n/a';
       paramMaxWeightInp.value = '3';
       optionsList.innerHTML   = '';
       optionsList.appendChild(makeOptionRow());
-      // populate the applies-to tree
       populateParamAssetFilter();
       addParamModal.style.display = 'flex';
     });
 
-    // ─── Close modal helpers ───────────────────────────────────────────────────
+    // ─── Close modal helpers ──────────────────────────────────────────────────
     function closeAddParamModal() {
       addParamModal.style.display = 'none';
     }
@@ -195,53 +240,62 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === addParamModal) closeAddParamModal();
     });
 
-    // ─── Save a new parameter (collect name, condition, options, appliesTo) ───
+    // ─── Save Parameter from modal: write one row per AppliesTo × Option ─────
     saveParamBtn.addEventListener('click', async () => {
       const parameter = paramNameInput.value.trim();
       const condition = paramConditionSel.value;
       const maxWeight = parseInt(paramMaxWeightInp.value, 10) || 1;
-      // gather options
-      const options = Array.from(optionsList.querySelectorAll('.option-row')).map(r => ({
+
+      const options = Array.from(
+        optionsList.querySelectorAll('.option-row')
+      ).map(r => ({
         label:  r.querySelector('.option-name').value.trim(),
         weight: parseInt(r.querySelector('.option-weight').value, 10)
       }));
-      // gather appliesTo rules
-      const appliesTo = Array.from(
+
+      const applies = Array.from(
         paramAssetFilter.querySelectorAll('input[type="checkbox"]:checked')
       ).map(cb => ({
+        company:   cb.dataset.company,
         location:  cb.dataset.location,
         assetType: cb.dataset.assetType
       }));
 
-      // TODO: send { parameter, condition, maxWeight, options, appliesTo }
-      // to your backend (e.g. extend save_algorithm_parameters)
+      // build the rows to persist
+      const rows = [];
+      applies.forEach(a => {
+        options.forEach(o => {
+          rows.push({
+            applies_to:  `${a.company} → ${a.location} → ${a.assetType}`,
+            parameter:   parameter,
+            condition:   condition,
+            max_weight:  maxWeight,
+            option:      o.label,
+            weight:      o.weight
+          });
+        });
+      });
 
+      // persist to lookups.xlsx via eel
+      await eel.save_algorithm_parameters(rows)();
+      // immediately display the newly added parameter
+      paramContainer.appendChild(
+        makeDisplayRow({ parameter, condition, options })
+      );
       closeAddParamModal();
     });
 
-    // ─── Save edited parameters (writes full list back to disk) ────────────────
+    // ─── Save edited parameters (older list panel) ───────────────────────────
     saveParamsBtn.addEventListener('click', async () => {
-      const toSave = Array.from(paramContainer.querySelectorAll('.param-row')).map(r => ({
+      const toSave = Array.from(
+        paramContainer.querySelectorAll('.param-row')
+      ).map(r => ({
         parameter: r.querySelector('.param-name').value.trim(),
         weight:    parseInt(r.querySelector('.param-weight').value, 10)
       }));
       await eel.save_algorithm_parameters(toSave)();
       renderParamStats(toSave);
-      loadTable();  // keep the read-only table in sync
     });
-
-    // ─── Populate the read-only bottom table ───────────────────────────────────
-    async function loadTable() {
-      paramsTableBody.innerHTML = '';
-      const rows = await eel.get_algorithm_parameters()();
-      rows.forEach(r => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.parameter}</td><td>${r.weight}</td>`;
-        paramsTableBody.appendChild(tr);
-      });
-    }
-    // initial fill
-    loadTable();
   }
 
   // ─── Station switcher (unchanged) ───────────────────────────────────────

@@ -366,12 +366,18 @@ def read_algorithm_parameters() -> list[dict]:
 
     ws = wb['Algorithm Parameters']
     result = []
-    for param, weight in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+    # columns: Applies To, Parameter, Condition, MaxWeight, Option, Weight
+    for applies_to, param, condition, max_weight, option, weight in \
+        ws.iter_rows(min_row=2, max_col=6, values_only=True):
         if param is None:
             continue
         result.append({
-            'parameter': str(param),
-            'weight': int(weight) if weight is not None else None
+            'applies_to':  str(applies_to or ''),
+            'parameter':   str(param),
+            'condition':   str(condition or ''),
+            'max_weight':  int(max_weight) if max_weight is not None else None,
+            'option':      str(option or ''),
+            'weight':      int(weight) if weight is not None else None
         })
     return result
 
@@ -387,13 +393,34 @@ def write_algorithm_parameters(params: list[dict]) -> dict:
     if 'Algorithm Parameters' in wb.sheetnames:
         ws_old = wb['Algorithm Parameters']
         wb.remove(ws_old)
-    # create new
+    # remove old sheet if exists
+    if 'Algorithm Parameters' in wb.sheetnames:
+        wb.remove(wb['Algorithm Parameters'])
     ws = wb.create_sheet('Algorithm Parameters')
-    # write header
-    ws.append(['Parameter', 'Weight'])
-    # write rows
-    for entry in params:
-        ws.append([entry.get('parameter',''), entry.get('weight','')])
+    # new header
+    ws.append(['Applies To','Parameter','Condition','MaxWeight','Option','Weight'])
+    # write rows, blanking out the first four columns after the first entry in each group
+    prev_key = None
+    for e in params:
+        key = (
+            e.get('applies_to',''),
+            e.get('parameter',''),
+            e.get('condition',''),
+            e.get('max_weight','')
+        )
+        if key == prev_key:
+            # same group: omit the first four columns
+            row = ['', '', '', '', e.get('option',''), e.get('weight','')]
+        else:
+            # new group: full row
+            row = [
+                key[0], key[1], key[2], key[3],
+                e.get('option',''), e.get('weight','')
+            ]
+            prev_key = key
+        ws.append(row)
+
+
     wb.save(LOOKUPS_PATH)
     return {'success': True}
 
