@@ -1,5 +1,5 @@
 // frontend/js/inventory.js
-// Handles the new "Inventor View" switch logic, loading its content from inventory.html
+// Handles the new "Inventory View" switch logic, loading its content from inventory.html
 
 document.addEventListener('DOMContentLoaded', () => {
   // View buttons
@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mapContainer.style.display = '';
     rightPanel.style.display   = '';
     setTimeout(() => map.invalidateSize(), 0);
+    window.lastActiveView = 'map';
   });
 
   // List View (in‐page panel)
@@ -51,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hideAllViews();
     listContainer.style.display = '';
     rightPanel.style.display    = '';
+    window.lastActiveView = 'list';
   });
 
   // Dashboard View

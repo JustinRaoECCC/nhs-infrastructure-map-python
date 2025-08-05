@@ -3,7 +3,6 @@
 let unlocked = false;
 let stationSnippet = null;
 let currentStation = null;
-let lastActiveView = null;
 
 // ─── Wire up all of the station‑detail buttons/handlers after the snippet is injected ───
 function wireUpStationEventHandlers() {
@@ -83,10 +82,6 @@ async function loadStationPage(stationId) {
   const invEl           = document.getElementById('inventorContentContainer');
   const rightPanel      = document.getElementById('rightPanel');
   const container       = document.getElementById('stationContentContainer');
-
-  // ── 1) Remember which view we came from
-  if (mapContainer.style.display !== 'none')      lastActiveView = 'map';
-  else if (listContainer.style.display !== 'none') lastActiveView = 'list';
 
   // ── 2) Show the full-screen transparent loader
   showLoaderOverlay();
@@ -341,7 +336,7 @@ function hideStationView() {
   const mapEl  = document.getElementById('mapContainer');
   const listEl = document.getElementById('listContainer');
 
-  if (lastActiveView === 'list') {
+  if (window.lastActiveView === 'list') {
     listEl.style.display = '';
     mapEl.style.display  = 'none';
   } else { // default back to map
