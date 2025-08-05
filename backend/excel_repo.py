@@ -150,31 +150,80 @@ class ExcelRepo(BaseRepo):
         loc    = station_obj["generalInfo"]["province"]
         asset  = station_obj["assetType"]
         path   = os.path.join(LOCATIONS_DIR, f"{loc}.xlsx")
+
+        print(f"[excel_repo.update_station] ▶️ called for station_id={sid!r}, loc={loc!r}, asset={asset!r}")
+
         if not os.path.exists(path):
-            return {"success": False, "message": f"No workbook for '{loc}'"}
+            msg = f"No workbook for '{loc}'"
+            print(f"[excel_repo.update_station] ❌ {msg}")
+            return {"success": False, "message": msg}
 
         wb = openpyxl.load_workbook(path)
         if asset not in wb.sheetnames:
-            return {"success": False, "message": f"No sheet '{asset}' in '{loc}.xlsx'"}
+            msg = f"No sheet '{asset}' in '{loc}.xlsx'"
+            print(f"[excel_repo.update_station] ❌ {msg}")
+            return {"success": False, "message": msg}
         ws = wb[asset]
 
-        # grab headers from row 2
+        # ─── Identify removed Section–Field columns ────────────────────────────────
+        # reload the updated workbook so our in-memory copy includes the deletions
+        wb = openpyxl.load_workbook(path)
+        ws = wb[asset]
         headers = [c.value for c in ws[2]]
+        desired_extra = {
+            f"{sec} – {fld}"
+            for sec, fields in station_obj.get("extraSections", {}).items()
+            for fld in fields
+        }
+        removed_cols = [
+            col for col in headers
+            if isinstance(col, str) and " – " in col and col not in desired_extra
+        ]
+        print(f"[excel_repo.update_station]   headers before: {headers}")
+        print(f"[excel_repo.update_station]   desired_extra: {desired_extra}")
+        print(f"[excel_repo.update_station]   removed_cols: {removed_cols}")
+
+        if removed_cols:
+            print(f"[excel_repo.update_station] ↪ Deleting columns {removed_cols} across all workbooks")
+            for loc_file in glob.glob(os.path.join(LOCATIONS_DIR, '*.xlsx')):
+                wb_loc = openpyxl.load_workbook(loc_file)
+                if asset in wb_loc.sheetnames:
+                    ws_loc = wb_loc[asset]
+                    hdrs_loc = [c.value for c in ws_loc[2]]
+                    # delete in reverse so indices stay valid
+                    for idx in range(len(hdrs_loc) - 1, -1, -1):
+                        if hdrs_loc[idx] in removed_cols:
+                            print(f"    • Deleting '{hdrs_loc[idx]}' at col {idx+1} in {loc_file}")
+                            ws_loc.delete_cols(idx + 1)
+                    wb_loc.save(loc_file)
+            # reload the updated file so our `wb` reflects the disk changes
+            print("[update_station] ⏬ reloading workbook to pick up deletions")
+            wb = openpyxl.load_workbook(path)
+            ws = wb[asset]
+            headers = [c.value for c in ws[2]]
+            print(f"[update_station]   headers now: {headers}")
+            print(f"[excel_repo.update_station]   headers after deletion: {headers}")
+
+        # ─── Locate the station’s row ────────────────────────────────────────────────
         try:
             idx_sid = headers.index("Station ID") + 1
         except ValueError:
-            return {"success": False, "message": "Missing 'Station ID' column"}
+            msg = "Missing 'Station ID' column"
+            print(f"[excel_repo.update_station] ❌ {msg}")
+            return {"success": False, "message": msg}
 
-        # find the row for this station
         row_num = None
         for r in range(3, ws.max_row + 1):
             if str(ws.cell(row=r, column=idx_sid).value).strip() == sid:
                 row_num = r
                 break
         if row_num is None:
-            return {"success": False, "message": f"Station '{sid}' not found"}
+            msg = f"Station '{sid}' not found"
+            print(f"[excel_repo.update_station] ❌ {msg}")
+            return {"success": False, "message": msg}
+        print(f"[excel_repo.update_station]   Found station at row {row_num}")
 
-        # update core fields
+        # ─── Write core fields ──────────────────────────────────────────────────────
         gen = station_obj["generalInfo"]
         mapping = {
             "Site Name":  gen["siteName"],
@@ -183,6 +232,7 @@ class ExcelRepo(BaseRepo):
             "Longitude":  gen["longitude"],
             "Status":     gen["status"],
         }
+        print(f"[excel_repo.update_station]   Updating core fields: {mapping}")
         for col_name, val in mapping.items():
             if col_name in headers:
                 col_idx = headers.index(col_name) + 1
@@ -190,9 +240,12 @@ class ExcelRepo(BaseRepo):
                 headers.append(col_name)
                 col_idx = len(headers)
                 ws.cell(row=2, column=col_idx, value=col_name)
+                print(f"    • Added header '{col_name}' at col {col_idx}")
             ws.cell(row=row_num, column=col_idx, value=val)
+            print(f"    • Wrote {col_name} = {val!r} at row {row_num}, col {col_idx}")
 
-        # update extraSections
+        # ─── Write remaining extraSections ───────────────────────────────────────────
+        print(f"[excel_repo.update_station]   Writing extraSections for row {row_num}")
         for sec, fields in station_obj.get("extraSections", {}).items():
             for fld, val in fields.items():
                 col_name = f"{sec} – {fld}"
@@ -202,9 +255,12 @@ class ExcelRepo(BaseRepo):
                     headers.append(col_name)
                     col_idx = len(headers)
                     ws.cell(row=2, column=col_idx, value=col_name)
+                    print(f"    • Added new extra header '{col_name}' at col {col_idx}")
                 ws.cell(row=row_num, column=col_idx, value=val)
+                print(f"    • Wrote {col_name} = {val!r} at row {row_num}, col {col_idx}")
 
         wb.save(path)
+        print(f"[excel_repo.update_station] ✅ Saved workbook {path}")
         return {"success": True}
 
 

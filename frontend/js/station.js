@@ -106,6 +106,11 @@ async function loadStationPage(stationId) {
   [mapContainer, listContainer, dashEl, invEl, rightPanel].forEach(el => {
     if (el) el.style.display = 'none';
   });
+
+   // hide the global "Add Company" button on station detail
+   const addCompanyBtn = document.getElementById('btnAddCompany');
+   if (addCompanyBtn) addCompanyBtn.style.display = 'none';
+
   // Hide the filters panel when viewing a station
   const filtersPanel = document.querySelector('.left-panel');
   if (filtersPanel) filtersPanel.style.display = 'none';
@@ -261,8 +266,11 @@ function addSection() {
   sectionsCt.appendChild(makeSectionBlock('', {}));
 }
 
+
 // Validate & gather data, then call backend
 async function saveChanges() {
+  console.log('[saveChanges] ▶️ saveChanges() invoked');
+
   // General info
   const gi = {
     stationId: document.getElementById('giStationId').value.trim(),
@@ -272,41 +280,68 @@ async function saveChanges() {
     longitude: parseFloat(document.getElementById('giLongitude').value),
     status:    document.getElementById('giStatus').value
   };
+  console.log('[saveChanges]   General Info:', gi);
+
   if (!gi.stationId || !gi.siteName || !gi.province || isNaN(gi.latitude) || isNaN(gi.longitude)) {
+    console.warn('[saveChanges] ❌ Missing or invalid general info');
     return alert('Please fill in all required General Information.');
   }
 
   // Extras
   const extraSections = {};
+  console.log('[saveChanges]   Collecting extraSections from DOM...');
   for (let block of document.querySelectorAll('.section-block')) {
     const secName = block.querySelector('.section-name').value.trim();
-    if (!secName) return alert('Section name cannot be empty.');
+    console.log(`  ↪ Section: "${secName}"`);
+    if (!secName) {
+      console.warn('[saveChanges] ❌ Empty section name');
+      return alert('Section name cannot be empty.');
+    }
     const rows = block.querySelectorAll('.fields-container > div');
-    if (rows.length === 0) return alert(`Section "${secName}" needs at least one field.`);
+    if (rows.length === 0) {
+      console.warn(`[saveChanges] ❌ No fields in section "${secName}"`);
+      return alert(`Section "${secName}" needs at least one field.`);
+    }
     extraSections[secName] = {};
     for (let r of rows) {
       const fName = r.querySelector('.field-name').value.trim();
-      if (!fName) return alert('Field name cannot be empty.');
-      const fVal = r.querySelector('.field-value').value;
+      const fVal  = r.querySelector('.field-value').value;
+      if (!fName) {
+        console.warn('[saveChanges] ❌ Empty field name');
+        return alert('Field name cannot be empty.');
+      }
+      console.log(`     • Field "${fName}" = "${fVal}"`);
       extraSections[secName][fName] = fVal;
     }
   }
+  console.log('[saveChanges]   Collected extraSections:', extraSections);
 
   // Build station object
   const stationObj = {
-    assetType:    currentStation.asset_type,
-    generalInfo:  gi,
+    assetType:     currentStation.asset_type,
+    generalInfo:   gi,
     extraSections: extraSections
   };
+  console.log('[saveChanges] ▶️ stationObj → backend:', stationObj);
 
-  // call backend (you'll need an @eel.expose save_station_details in app.py)
-  const res = await eel.save_station_details(stationObj)();
+  // call backend
+  let res;
+  try {
+    res = await eel.save_station_details(stationObj)();
+    console.log('[saveChanges] ← backend response:', res);
+  } catch (err) {
+    console.error('[saveChanges] ❌ Eel call failed', err);
+    return alert('Unexpected error saving station details.');
+  }
+
   if (res.success) {
+    console.log('[saveChanges] ✅ Saved successfully, relocking & refreshing markers');
     alert('Saved successfully!');
     toggleEditing(true);      // relock
     window.refreshMarkers();  // update map pins
   } else {
-    alert('Error saving: ' + (res.message||JSON.stringify(res)));
+    console.error('[saveChanges] ❌ Save failed:', res.message || res);
+    alert('Error saving: ' + (res.message || JSON.stringify(res)));
   }
 }
 
@@ -331,6 +366,10 @@ function hideStationView() {
   // 2) Show filters
   const filters = document.querySelector('.left-panel');
   if (filters) filters.style.display = '';
+
+  // restore the global "Add Company" button when leaving details
+  const addCompanyBtn = document.getElementById('btnAddCompany');
+  if (addCompanyBtn) addCompanyBtn.style.display = ''
 
   // 3) Restore only the view you were on
   const mapEl  = document.getElementById('mapContainer');
