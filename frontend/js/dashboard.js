@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ─── Station switcher (unchanged) ───────────────────────────────────────
+  // ─── Station switcher ───────────────────────────────────────
   document.body.addEventListener('click', async e => {
     const link = e.target.closest('.popup-link');
     if (!link) return;
@@ -339,10 +339,12 @@ document.addEventListener('DOMContentLoaded', () => {
     rightPanel.style.display         = 'none';
     dashPlaceholder.style.display    = 'none';
     stationPlaceholder.style.display = 'none';
+    const listContainer = document.getElementById('listContainer');
+    if (listContainer) listContainer.style.display = 'none';
     loadStationPage(stationId);
   });
 
-  // ─── Workplan loader & saver (unchanged) ────────────────────────────────
+  // ─── Workplan loader & saver ────────────────────────────────
   const wpContainer = dashPlaceholder.querySelector('#workplanContainer');
   const wpInputs    = wpContainer
     ? Array.from(wpContainer.querySelectorAll('.wp-value'))
