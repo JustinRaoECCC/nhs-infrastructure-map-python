@@ -367,8 +367,8 @@ def read_algorithm_parameters() -> list[dict]:
     ws = wb['Algorithm Parameters']
     result = []
     # columns: Applies To, Parameter, Condition, MaxWeight, Option, Weight
-    for applies_to, param, condition, max_weight, option, weight in \
-        ws.iter_rows(min_row=2, max_col=6, values_only=True):
+    for applies_to, param, condition, max_weight, option, weight, selected in \
+        ws.iter_rows(min_row=2, max_col=7, values_only=True):
         if param is None:
             continue
         result.append({
@@ -377,52 +377,33 @@ def read_algorithm_parameters() -> list[dict]:
             'condition':   str(condition or ''),
             'max_weight':  int(max_weight) if max_weight is not None else None,
             'option':      str(option or ''),
-            'weight':      int(weight) if weight is not None else None
+            'weight':      int(weight) if weight is not None else None,
+            'selected':    True if isinstance(selected, str) and selected.strip().upper() == 'TRUE' else False
         })
     return result
 
 def write_algorithm_parameters(params: list[dict]) -> dict:
-    """
-    Overwrite the 'Algorithm Parameters' sheet with the given list
-    of {'parameter':…, 'weight':…}.
-    """
-    from openpyxl import load_workbook
-
     wb = load_workbook(LOOKUPS_PATH)
-    # remove old sheet if exists
-    if 'Algorithm Parameters' in wb.sheetnames:
-        ws_old = wb['Algorithm Parameters']
-        wb.remove(ws_old)
-    # remove old sheet if exists
     if 'Algorithm Parameters' in wb.sheetnames:
         wb.remove(wb['Algorithm Parameters'])
     ws = wb.create_sheet('Algorithm Parameters')
-    # new header
-    ws.append(['Applies To','Parameter','Condition','MaxWeight','Option','Weight'])
-    # write rows, blanking out the first four columns after the first entry in each group
-    prev_key = None
-    for e in params:
-        key = (
-            e.get('applies_to',''),
-            e.get('parameter',''),
-            e.get('condition',''),
-            e.get('max_weight','')
-        )
-        if key == prev_key:
-            # same group: omit the first four columns
-            row = ['', '', '', '', e.get('option',''), e.get('weight','')]
-        else:
-            # new group: full row
-            row = [
-                key[0], key[1], key[2], key[3],
-                e.get('option',''), e.get('weight','')
-            ]
-            prev_key = key
-        ws.append(row)
-
+    # write full header
+    ws.append(['Applies To','Parameter','Condition','MaxWeight','Option','Weight','Selected'])
+    # write every passed row (one for each option)
+    for row in params:
+        ws.append([
+            row['applies_to'],
+            row['parameter'],
+            row['condition'],
+            row['max_weight'],
+            row['option'],
+            row['weight'],
+            'TRUE' if row.get('selected', False) else ''
+        ])
 
     wb.save(LOOKUPS_PATH)
     return {'success': True}
+
 
 # ─── Workplan Details (5th sheet) ────────────────────────────────────────────
 def read_workplan_details() -> list[dict]:

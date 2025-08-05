@@ -73,9 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ─── Helpers: build a display‐row for saved parameters ───────────────────────
-    function makeDisplayRow({ parameter, condition, options }) {
+    function makeDisplayRow({ applies_to, parameter, condition, max_weight, options }) {
       const row = document.createElement('div');
       row.className = 'param-row';
+      // embed the applies_to and max_weight in data-attributes:
+      row.dataset.appliesto  = applies_to;
+      row.dataset.maxWeight  = max_weight;
       row.innerHTML = `
         <input type="text" class="param-name" value="${parameter}" disabled />
         <select class="param-condition" disabled>
@@ -102,14 +105,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const weightDisplay = row.querySelector('.param-weight-display');
       options.forEach(o => {
         const opt = document.createElement('option');
-        opt.value = o.weight;
+        opt.value       = o.weight;
         opt.textContent = o.label;
+        if (o.selected) {
+          opt.selected = true;
+          weightDisplay.textContent = o.weight;
+        }
         optSel.appendChild(opt);
       });
-      // initialize display to first option’s weight
-      if (options.length) {
+      // if none was explicitly marked, fall back to first
+      if (!options.some(o=>o.selected) && options.length) {
+        optSel.selectedIndex    = 0;
         weightDisplay.textContent = options[0].weight;
       }
+      // update display when the user changes selection
       optSel.addEventListener('change', () => {
         weightDisplay.textContent = optSel.value;
       });
@@ -141,13 +150,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const key = `${e.parameter}||${e.condition}`;
       if (!grouped[key]) {
         grouped[key] = {
-          parameter: e.parameter,
-          condition: e.condition,
-          options: []
+          applies_to: e.applies_to,
+          parameter:  e.parameter,
+          condition:  e.condition,
+          max_weight: e.max_weight,
+          options:    []
         };
       }
-      grouped[key].options.push({ label: e.option, weight: e.weight });
+      grouped[key].options.push({
+        label:    e.option,
+        weight:   e.weight,
+        selected: e.selected
+      });
     });
+
 
     // Now render one row per parameter group
     Object.values(grouped).forEach(grp => {
@@ -287,12 +303,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ─── Save edited parameters (older list panel) ───────────────────────────
     saveParamsBtn.addEventListener('click', async () => {
-      const toSave = Array.from(
-        paramContainer.querySelectorAll('.param-row')
-      ).map(r => ({
-        parameter: r.querySelector('.param-name').value.trim(),
-        weight:    parseInt(r.querySelector('.param-weight').value, 10)
-      }));
+      // Gather every option row, reading from our data-attributes
+      const toSave = Array.from(paramContainer.querySelectorAll('.param-row'))
+        .flatMap(r => {
+          const applies = r.dataset.appliesto;
+          const maxW    = parseInt(r.dataset.maxWeight, 10);
+          const param   = r.querySelector('.param-name').value.trim();
+          const cond    = r.querySelector('.param-condition').value;
+          return Array.from(r.querySelectorAll('.param-options option'))
+            .map(opt => ({
+              applies_to: applies,
+              parameter:  param,
+              condition:  cond,
+              max_weight: maxW,
+              option:     opt.textContent,
+              weight:     parseInt(opt.value, 10),
+              selected:   opt.selected
+            }));
+        });
+
+
+      // send all rows back to Python
       await eel.save_algorithm_parameters(toSave)();
       renderParamStats(toSave);
     });
