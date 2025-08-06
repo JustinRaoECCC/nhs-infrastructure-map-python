@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rightPanel         = document.getElementById('rightPanel');
   const dashPlaceholder    = document.getElementById('dashboardContentContainer');
   const stationPlaceholder = document.getElementById('stationContentContainer');
+  
 
   // ─── Show Dashboard ────────────────────────────────────────────────────────
   async function showDashboard() {
@@ -184,23 +185,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 style="width:5em; margin-right:0.5em;"></select>
         <button class="deleteOptionBtn" style="color:red;">×</button>
       `;
+
+      const deleteBtn    = row.querySelector('.deleteOptionBtn');
       const nameInput    = row.querySelector('.option-name');
       const weightSelect = row.querySelector('.option-weight');
-      const deleteBtn    = row.querySelector('.deleteOptionBtn');
 
       nameInput.value = label;
       function populateWeights() {
         const max = Math.max(1, parseInt(paramMaxWeightInp.value) || 1);
+        // remember previous choice (or fallback to initial weight)
+        const prev = parseInt(weightSelect.value, 10) || weight;
         weightSelect.innerHTML = '';
         for (let i = 1; i <= max; i++) {
           const opt = document.createElement('option');
           opt.value = opt.textContent = i;
           weightSelect.appendChild(opt);
         }
-        weightSelect.value = Math.min(weight, max);
+        // restore to previous, capped by new max
+        weightSelect.value = Math.min(prev, max);
       }
+ 
       paramMaxWeightInp.addEventListener('change', populateWeights);
       populateWeights();
+      // custom weights are managed via the central Custom Weights modal
+
       deleteBtn.addEventListener('click', () => row.remove());
       return row;
     }
@@ -254,6 +262,65 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelParamBtn.addEventListener('click', closeAddParamModal);
     addParamModal.addEventListener('click', e => {
       if (e.target === addParamModal) closeAddParamModal();
+    });
+
+    const btnOpenCustomWeightModal   = document.getElementById('addCustomWeightBtn');
+    const customWeightModal      = document.getElementById('customWeightModal');
+    const closeCustomWeightModal = document.getElementById('closeCustomWeightModal');
+    const cancelCustomWeight     = document.getElementById('cancelCustomWeight');
+    const confirmCustomWeight    = document.getElementById('confirmCustomWeight');
+    const selectCustomWeight     = document.getElementById('selectCustomWeight');
+    const inputNewCustomWeight   = document.getElementById('inputNewCustomWeight');
+    const btnSaveCustomWeight    = document.getElementById('btnSaveCustomWeight');
+
+    // Open the Custom Weight modal
+    btnOpenCustomWeightModal.addEventListener('click', async () => {
+      // populate dropdown from lookup
+      selectCustomWeight.innerHTML = '<option value="">-- select weight --</option>';
+      const weights = await eel.get_custom_weights()();
+      weights.forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = w.weight;
+        selectCustomWeight.appendChild(opt);
+      });
+      inputNewCustomWeight.value = '';
+      customWeightModal.style.display = 'flex';
+    });
+
+    // Add a new weight into lookups and dropdown
+    btnSaveCustomWeight.addEventListener('click', async () => {
+      const newWt = inputNewCustomWeight.value.trim();
+      if (!newWt) return alert('Please enter a custom weight.');
+      await eel.add_custom_weight(newWt, true)();
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = newWt;
+      selectCustomWeight.appendChild(opt);
+      selectCustomWeight.value = newWt;
+    });
+
+    // Confirm selection and apply to all option-weight selects
+    confirmCustomWeight.addEventListener('click', () => {
+      const chosen = selectCustomWeight.value;
+      if (!chosen) return alert('Please select or add a custom weight.');
+      document.querySelectorAll('.option-weight').forEach(sel => {
+        if (![...sel.options].some(o => o.value === chosen)) {
+          const o = document.createElement('option');
+          o.value = o.textContent = chosen;
+          sel.appendChild(o);
+        }
+        sel.value = chosen;
+      });
+      customWeightModal.style.display = 'none';
+    });
+
+    // Close handlers (keep these)
+    [closeCustomWeightModal, cancelCustomWeight].forEach(btn =>
+      btn.addEventListener('click', () => {
+        customWeightModal.style.display = 'none';
+      })
+    );
+    customWeightModal.addEventListener('click', e => {
+      if (e.target === customWeightModal) customWeightModal.style.display = 'none';
     });
 
     // ─── Save Parameter from modal: write one row per AppliesTo × Option ─────

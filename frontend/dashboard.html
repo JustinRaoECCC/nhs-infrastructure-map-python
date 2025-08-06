@@ -1,119 +1,153 @@
-  <div id="dashboardContainer">
-    <div class="dashboard-tabs">
-      <button class="dashboard-tab active" data-target="parameters">Parameters</button>
-      <button class="dashboard-tab" data-target="workplan">Workplan</button>
-      <button class="dashboard-tab" data-target="optimization">Optimization</button>
+<div id="dashboardContainer">
+  <div class="dashboard-tabs">
+    <button class="dashboard-tab active" data-target="parameters">Parameters</button>
+    <button class="dashboard-tab" data-target="workplan">Workplan</button>
+    <button class="dashboard-tab" data-target="optimization">Optimization</button>
+  </div>
+
+  <!-- 1) Interactive Parameters editor -->
+  <div id="parameters" class="dashboard-content active">
+    <div class="top-pane">
+      <div id="paramContainer"></div>
+      <button id="addParamBtn">+ Add Parameter</button>
+      <button id="saveParamsBtn">💾 Save Changes</button>
     </div>
 
-    <!-- 1) Interactive Parameters editor -->
-    <div id="parameters" class="dashboard-content active">
-      <div class="top-pane">
-        <div id="paramContainer"></div>
-        <button id="addParamBtn">+ Add Parameter</button>
-        <button id="saveParamsBtn">💾 Save Changes</button>
-      </div>
+    <hr class="separator"/>
 
-      <hr class="separator"/>
-
-      <div class="bottom-pane">
-        <!-- stats summary -->
-        <div id="paramStats"></div>
-        <!-- Parameter list removed until we decide what goes here -->
-      </div>
-
+    <div class="bottom-pane">
+      <!-- stats summary -->
+      <div id="paramStats"></div>
+      <!-- Parameter list removed until we decide what goes here -->
     </div>
+  </div>
 
-    <!-- 2) Workplan -->
-    <div id="workplan" class="dashboard-content">
-      <!-- top half: existing controls -->
-      <div class="top-pane">
-        <div id="workplanContainer">
-          <div class="wp-row">
-            <label>Yearly Budget</label>
-            <input type="text" class="wp-value" data-key="Yearly Budget" />
-          </div>
-          <div class="wp-row">
-            <label>O&amp;M Current Split</label>
-            <input type="text" class="wp-value" data-key="O&M Current Split" />
-          </div>
-          <button id="saveWorkplanBtn">💾 Save Changes</button>
+  <!-- 2) Workplan -->
+  <div id="workplan" class="dashboard-content">
+    <!-- top half: existing controls -->
+    <div class="top-pane">
+      <div id="workplanContainer">
+        <div class="wp-row">
+          <label>Yearly Budget</label>
+          <input type="text" class="wp-value" data-key="Yearly Budget" />
         </div>
-      </div>
-
-      <hr class="separator" />
-
-      <!-- bottom half: dynamic table -->
-      <div class="bottom-pane">
-        <table id="workplanTable">
-          <thead>
-            <tr id="workplanHeaders"></tr>
-          </thead>
-          <tbody id="workplanBody">
-            <!-- rows will go here -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 3) Optimization -->
-    <div id="optimization" class="dashboard-content">
-      <div class="opt-container">
-        <button id="optimizeBtn">Optimize Workplan</button>
-      </div>
-    </div>
-
-    <!-- Add Parameter Modal -->
-    <div id="addParamModal" class="modal" style="display:none;">
-      <div class="modal-content" style="width:400px; max-width:90%;">
-        <span class="close-modal" id="closeAddParamModal">&times;</span>
-        <h2 class="modal-header">Add New Parameter</h2>
-
-        <div style="margin-top:1em;">
-          <label>Parameter Name</label><br/>
-          <input type="text" id="paramNameInput"
-                placeholder="Enter name"
-                style="width:100%; padding:0.5em;"/>
+        <div class="wp-row">
+          <label>O&amp;M Current Split</label>
+          <input type="text" class="wp-value" data-key="O&M Current Split" />
         </div>
+        <button id="saveWorkplanBtn">💾 Save Changes</button>
+      </div>
+    </div>
 
-        <div style="margin-top:1em;">
-          <label>Condition Type</label><br/>
-          <select id="paramConditionSelect"
-                  style="width:100%; padding:0.5em;">
-            <option value="n/a">n/a</option>
-            <option value="IF">IF</option>
-            <option value="WHILE">WHILE</option>
+    <hr class="separator" />
+
+    <!-- bottom half: dynamic table -->
+    <div class="bottom-pane">
+      <table id="workplanTable">
+        <thead>
+          <tr id="workplanHeaders"></tr>
+        </thead>
+        <tbody id="workplanBody">
+          <!-- rows will go here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3) Optimization -->
+  <div id="optimization" class="dashboard-content">
+    <div class="opt-container">
+      <button id="optimizeBtn">Optimize Workplan</button>
+    </div>
+  </div>
+
+  <!-- Add Parameter Modal -->
+  <div id="addParamModal" class="modal" style="display:none;">
+    <div class="modal-content" style="width:400px; max-width:90%;">
+      <span class="close-modal" id="closeAddParamModal">&times;</span>
+      <h2 class="modal-header">Add New Parameter</h2>
+
+      <div style="margin-top:1em;">
+        <label>Parameter Name</label><br/>
+        <input type="text" id="paramNameInput"
+               placeholder="Enter name"
+               style="width:100%; padding:0.5em;"/>
+      </div>
+
+      <div style="margin-top:1em;">
+        <label>Condition Type</label><br/>
+        <select id="paramConditionSelect"
+                style="width:100%; padding:0.5em;">
+          <option value="n/a">n/a</option>
+          <option value="IF">IF</option>
+          <option value="WHILE">WHILE</option>
+        </select>
+      </div>
+
+      <div style="margin-top:1em;">
+        <label>Max Weight (1–Y)</label><br/>
+        <input type="number" id="paramMaxWeight"
+               min="1" value="3"
+               style="width:100%; padding:0.5em;"/>
+      </div>
+
+      <!-- + Add Custom Weight button -->
+      <div style="margin-top:1em;">
+        <button id="addCustomWeightBtn" style="padding:0.5em 1em;">
+          + Add Custom Weight
+        </button>
+      </div>
+
+      <!-- Options container -->
+      <div id="optionsContainer" style="margin-top:1em;">
+        <h3>Options → Weight</h3>
+        <button type="button" id="addOptionBtn"
+                style="margin-bottom:0.5em;">+ Add Option</button>
+        <div id="optionsList"></div>
+      </div>
+
+      <div id="customWeightModal" class="modal" style="display:none;">
+        <div class="modal-content" style="width:300px; max-width:90%;">
+          <span class="close-modal" id="closeCustomWeightModal">&times;</span>
+          <h2 class="modal-header">Add / Select Custom Weight</h2>
+          <select id="selectCustomWeight"
+                  style="width:100%; padding:0.5em; margin-top:1em;">
+            <option value="">-- select weight --</option>
           </select>
-        </div>
-
-        <div style="margin-top:1em;">
-          <label>Max Weight (1–Y)</label><br/>
-          <input type="number" id="paramMaxWeight"
-                min="1" value="3"
-                style="width:100%; padding:0.5em;"/>
-        </div>
-
-        <div id="optionsContainer" style="margin-top:1em;">
-          <h3>Options → Weight</h3>
-          <button type="button" id="addOptionBtn"
-                  style="margin-bottom:0.5em;">+ Add Option</button>
-          <div id="optionsList"></div>
-        </div>
-
-        <!-- inside the <div id="addParamModal" …>, after your Options container -->
-        <div style="margin-top:1em;">
-          <h3>Applies To</h3>
-          <div id="paramAssetFilter" style="max-height:200px; overflow:auto;
-              border:1px solid #ccc; padding:0.5em;"></div>
-        </div>
-
-        <div style="margin-top:1.5em; text-align:right;">
-          <button id="saveParamBtn" style="padding:0.5em 1em;">
-            Save Parameter
+          <input type="text" id="inputNewCustomWeight"
+                 placeholder="New custom weight"
+                 style="width:100%; padding:0.5em; margin-top:0.5em;"/>
+          <button id="btnSaveCustomWeight"
+                  style="padding:0.5em 1em; margin-top:0.5em;">
+            ➕ Add Custom Weight
           </button>
-          <button id="cancelParamBtn" style="padding:0.5em 1em;
-                                          margin-left:0.5em;">
-            Cancel
-          </button>
+          <div style="margin-top:1.5em; text-align:right;">
+            <button id="confirmCustomWeight" style="padding:0.5em 1em;">
+              Confirm
+            </button>
+            <button id="cancelCustomWeight"
+                    style="padding:0.5em 1em; margin-left:0.5em;">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
+
+      <!-- Applies To section -->
+      <div style="margin-top:1em;">
+        <h3>Applies To</h3>
+        <div id="paramAssetFilter" style="max-height:200px; overflow:auto;
+             border:1px solid #ccc; padding:0.5em;"></div>
+      </div>
+
+      <div style="margin-top:1.5em; text-align:right;">
+        <button id="saveParamBtn" style="padding:0.5em 1em;">
+          Save Parameter
+        </button>
+        <button id="cancelParamBtn" style="padding:0.5em 1em; margin-left:0.5em;">
+          Cancel
+        </button>
+      </div>
     </div>
+  </div>
+</div>

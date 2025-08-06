@@ -13,13 +13,23 @@ function wireUpStationEventHandlers() {
     console.log(`   ⚙️ binding tab click for “[${tab.dataset.target}]”`);
     tab.addEventListener('click', () => {
       console.log(`   🔄 tab “[${tab.dataset.target}]” clicked`);
+      // switch the active panel
       document.querySelectorAll('.tab, .tab-content')
               .forEach(el => el.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(tab.dataset.target)
               .classList.add('active');
+
+      // if Photos tab, load the Photos UI
+      if (tab.dataset.target === 'photos') {
+        console.log('[station] Photos tab activated, loading photos.js');
+        import('./photos.js')
+          .then(mod => mod.loadPhotosTab())
+          .catch(err => console.error('[station] failed to load photos.js:', err));
+      }
     });
   });
+
 
   // ── Back to map view ─────────────────────────────────────────────────────
   const backBtn = document.getElementById('backButton');

@@ -82,6 +82,15 @@ def ensure_lookups_file():
         ws['B1'] = 'location'
         ws['C1'] = 'color'
         changed = True
+    # — ensure Custom Weights sheet exists ——
+    if 'Custom Weights' not in wb.sheetnames:
+        ws = wb.create_sheet('Custom Weights')
+        ws['A1'] = 'weight'
+        ws['B1'] = 'active'
+        # bold headers like other lookup sheets
+        ws['A1'].font = Font(bold=True)
+        ws['B1'].font = Font(bold=True)
+        changed = True
     if changed:
         wb.save(LOOKUPS_PATH)
 
@@ -138,6 +147,11 @@ def append_to_lookup(sheet_name: str, entry_value: str, second_value: str = None
         # make sure header row has 3 columns: A=asset_type, B=location, C=color
         color = _get_random_color()
         ws.append([val, second_value or '', color])
+    elif sheet_name == 'Custom Weights':
+        # entry_value = weight, second_value = 'TRUE' or ''
+        ws.append([entry_value, second_value or ''])
+        wb.save(LOOKUPS_PATH)
+        return True
     else:
         ws.append([val])
         
@@ -454,3 +468,28 @@ def write_workplan_details(entries: list[dict]) -> dict:
         ws.append([e.get('parameter',''), e.get('value','')])
     wb.save(LOOKUPS_PATH)
     return {'success': True}
+
+# ─── Custom Weights APIs ───────────────────────────────────────────────────
+def read_custom_weights() -> list[dict]:
+    """
+    Return list of {'weight': str, 'active': bool}
+    """
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if 'Custom Weights' not in wb.sheetnames:
+        # created earlier in ensure_data_folder
+        ensure_lookups_file()
+        wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    ws = wb['Custom Weights']
+    out = []
+    for w, flag in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+        if w is None: continue
+        out.append({
+            'weight': str(w),
+            'active': isinstance(flag, str) and flag.strip().upper() == 'TRUE'
+        })
+    return out
+
+def add_custom_weight(weight: str, active: bool = False) -> bool:
+    """Append weight to Custom Weights sheet; mark active if requested."""
+    flag = 'TRUE' if active else ''
+    return append_to_lookup('Custom Weights', weight, flag)

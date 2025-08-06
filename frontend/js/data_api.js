@@ -72,5 +72,8 @@ window.electronAPI = {
   },
 
   // — Nuke everything —
-  dataNuke:                   ()            => eel.data_nuke()()
+  dataNuke:                   ()            => eel.data_nuke()(),
+
+  getCustomWeights:       ()            => eel.get_custom_weights()(),
+  addCustomWeight:        (wt,act=false) => eel.add_custom_weight(wt,act)(),
 };

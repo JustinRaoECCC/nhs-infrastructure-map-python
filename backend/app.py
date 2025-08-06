@@ -13,6 +13,8 @@ from .lookups_manager import (
     ensure_data_folder,
     ensure_lookups_file,
     delete_all_data_files,
+    read_custom_weights,
+    add_custom_weight as lm_add_custom_weight,
     get_asset_type_color,
     get_asset_type_color_for_location,
     read_algorithm_parameters,
@@ -194,6 +196,20 @@ def get_workplan_details():
     return read_workplan_details()
 
 @eel.expose
+def get_custom_weights():
+    """Return saved custom weights (weight + active)."""
+    return read_custom_weights()
+
+@eel.expose
+def add_custom_weight(weight, active=False):
+    """
+    weight: string or number
+    active: boolean
+    """
+    ok = lm_add_custom_weight(str(weight), active)
+    return {"success": ok}
+
+@eel.expose
 def save_workplan_details(entries):
     """
     entries: list of {parameter: str, value: any}
@@ -210,6 +226,48 @@ def save_station_details(station_obj):
 def delete_station(station_id):
     # implement/delete in DataManager: remove the row from Excel (and DB)
     return dm.delete_station(station_id)
+
+@eel.expose
+def list_photos(root_dir: str):
+    """
+    Walk `root_dir` and return a nested dict:
+    { name: <str>, type: 'folder', children: [ ... ] }
+    or { name: <str>, type: 'file', path: <full_path> } for images.
+    """
+    tree = {"name": os.path.basename(root_dir),
+            "type": "folder",
+            "children": []}
+    for entry in sorted(os.listdir(root_dir)):
+        full = os.path.join(root_dir, entry)
+        if os.path.isdir(full):
+            tree["children"].append(list_photos(full))
+        else:
+            ext = entry.lower().rsplit(".",1)[-1]
+            if ext in ("png","jpg","jpeg","gif","bmp"):
+                tree["children"].append({
+                    "name": entry,
+                    "type": "file",
+                    "path": full
+                })
+    return tree
+
+@eel.expose
+def get_photo_data(path: str) -> str:
+    """
+    Read the image file at `path` and return a data: URL
+    so the frontend can display it.
+    """
+    import base64, mimetypes
+    try:
+        ctype, _ = mimetypes.guess_type(path)
+        with open(path, "rb") as f:
+            data = base64.b64encode(f.read()).decode("ascii")
+        return f"data:{ctype or 'application/octet-stream'};base64,{data}"
+    except Exception as e:
+        # return empty so frontend can handle missing file
+        print("get_photo_data error:", e)
+        return ""
+
 
 # ─── Asset‑Type Color APIs ─────────────────────────────────────────────────
 @eel.expose
