@@ -76,4 +76,10 @@ window.electronAPI = {
 
   getCustomWeights:       ()            => eel.get_custom_weights()(),
   addCustomWeight:        (wt,act=false) => eel.add_custom_weight(wt,act)(),
+  saveWorkplanDetails:        (entries)     => eel.save_workplan_details(entries)(),
+  saveWorkplanConstants:      (entries)     => eel.save_workplan_constants(entries)(),
+  getWorkplanDetails:         ()            => eel.get_workplan_details()(),
+  getWorkplanConstants:       ()            => eel.get_workplan_constants()(),
+  optimizeWorkplan:           ()            => eel.optimize_workplan()(),
+
 };

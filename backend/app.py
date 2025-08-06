@@ -20,12 +20,15 @@ from .lookups_manager import (
     read_algorithm_parameters,
     write_algorithm_parameters,
     read_workplan_details,
-    write_workplan_details
+    write_workplan_details,
+    read_workplan_constants,
+    write_workplan_constants
 )
 from .data_manager     import DataManager
 from .data_nuke import data_nuke
 from .bulk_importer import get_sheet_names, import_sheet_data
 from .repairs_manager import save_repair
+from .algorithm import optimize_workplan as _optimize_workplan
 
 # ─── Station file constants ─────────────────────────────────────────────────
 HERE = os.path.dirname(__file__)
@@ -196,6 +199,18 @@ def get_workplan_details():
     return read_workplan_details()
 
 @eel.expose
+def get_workplan_constants():
+    """Return saved workplan constants from lookups.xlsx."""
+    return read_workplan_constants()
+
+@eel.expose
+def save_workplan_constants(constants):
+    """
+    constants: list of {field: str, value: any}
+    """
+    return write_workplan_constants(constants)
+
+@eel.expose
 def get_custom_weights():
     """Return saved custom weights (weight + active)."""
     return read_custom_weights()
@@ -267,7 +282,34 @@ def get_photo_data(path: str) -> str:
         # return empty so frontend can handle missing file
         print("get_photo_data error:", e)
         return ""
-
+ 
+@eel.expose
+def get_photo_chunks(path: str) -> list[str]:
+    """
+    Read the image file at `path` and return its base64 data split into
+    ASCII-safe chunks (so no single WebSocket frame exceeds ~16 KB).
+    """
+    import base64, mimetypes, os
+    try:
+        # Read and encode
+        raw = open(path, "rb").read()
+        b64 = base64.b64encode(raw).decode("ascii")
+        # Split into 16 000-char chunks
+        chunk_size = 16000
+        return [b64[i : i + chunk_size] for i in range(0, len(b64), chunk_size)]
+    except Exception as e:
+        print("get_photo_chunks error:", e)
+        return []
+    
+@eel.expose
+def stream_photo(path, uid):
+    import base64, os
+    b64 = base64.b64encode(open(path,"rb").read()).decode("ascii")
+    chunk_size = 16000
+    for i in range(0, len(b64), chunk_size):
+        eel.receive_photo_chunk(uid, b64[i:i+chunk_size])
+    eel.receive_photo_done(uid)
+    
 
 # ─── Asset‑Type Color APIs ─────────────────────────────────────────────────
 @eel.expose
@@ -324,6 +366,22 @@ def set_asset_type_color_for_location(asset_type, location, color):
             return {"success": True}
     return {"success": False, "message": f"No row for {asset_type}@{location}"}
 
+@eel.expose
+def optimize_workplan():
+    """
+    Called by the front-end when the user clicks “Optimize Workplan”.
+    Gathers current stations, algorithm parameters, and constants, then runs the algorithm.
+    """
+    # 1) Fetch all data
+    stations = dm.list_stations()
+    params   = read_algorithm_parameters()
+    consts   = read_workplan_constants()
+
+    # 2) Delegate to algorithm.py
+    result = _optimize_workplan(stations, params, consts)
+
+    # 3) Return back to JS
+    return result
 
 # ─── App startup ────────────────────────────────────────────────────────────
 def main():

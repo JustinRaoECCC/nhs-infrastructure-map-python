@@ -91,6 +91,18 @@ def ensure_lookups_file():
         ws['A1'].font = Font(bold=True)
         ws['B1'].font = Font(bold=True)
         changed = True
+    # ═══ Workplan Constants (6th sheet) ════════════════════════════════════
+    if 'Workplan Constants' not in wb.sheetnames:
+        ws = wb.create_sheet('Workplan Constants')
+        # Bold headers
+        ws['A1'] = 'Field'
+        ws['B1'] = 'Value'
+        ws['A1'].font = Font(bold=True)
+        ws['B1'].font = Font(bold=True)
+        # Preset constants
+        ws.append(['Yearly Budget', ''])
+        ws.append(['O&M Current Split', ''])
+        changed = True
     if changed:
         wb.save(LOOKUPS_PATH)
 
@@ -104,9 +116,20 @@ def read_lookup_list(sheet_name: str) -> list[str]:
     wb = load_workbook(LOOKUPS_PATH)
     if sheet_name not in wb.sheetnames:
         ws = wb.create_sheet(sheet_name)
-        ws['A1'] = 'LocationName' if sheet_name == 'Locations' else 'AssetTypeName'
+        # match our canonical headers
+        if sheet_name == 'Locations':
+            ws['A1'] = 'location'
+            ws['B1'] = 'company'
+        elif sheet_name == 'AssetTypes':
+            ws['A1'] = 'asset_type'
+            ws['B1'] = 'location'
+            ws['C1'] = 'color'
+        else:
+            # for sheets like "Companies" or "Custom Weights"
+            ws['A1'] = sheet_name.slice(0, -1).toLowerCase()
         wb.save(LOOKUPS_PATH)
         return []
+
 
     ws = wb[sheet_name]
     result = []
@@ -493,3 +516,39 @@ def add_custom_weight(weight: str, active: bool = False) -> bool:
     """Append weight to Custom Weights sheet; mark active if requested."""
     flag = 'TRUE' if active else ''
     return append_to_lookup('Custom Weights', weight, flag)
+
+# ─── Workplan Constants APIs (6th sheet) ────────────────────────────────────
+def read_workplan_constants() -> list[dict]:
+    """
+    Ensure 'Workplan Constants' exists, then return rows as
+    [{'field': str, 'value': any}, …].
+    """
+    if not os.path.exists(LOOKUPS_PATH):
+        ensure_lookups_file()
+    wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    if 'Workplan Constants' not in wb.sheetnames:
+        ensure_lookups_file()
+        wb = load_workbook(LOOKUPS_PATH, data_only=True)
+    ws = wb['Workplan Constants']
+    out = []
+    for field, val in ws.iter_rows(min_row=2, max_col=2, values_only=True):
+        if field is None: continue
+        out.append({'field': str(field), 'value': val})
+    return out
+
+def write_workplan_constants(entries: list[dict]) -> dict:
+    """
+    Overwrite the 'Workplan Constants' sheet with the given entries.
+    """
+    wb = load_workbook(LOOKUPS_PATH)
+    if 'Workplan Constants' in wb.sheetnames:
+        wb.remove(wb['Workplan Constants'])
+    ws = wb.create_sheet('Workplan Constants')
+    # Header row
+    ws.append(['Field', 'Value'])
+    ws['A1'].font = Font(bold=True)
+    ws['B1'].font = Font(bold=True)
+    for e in entries:
+        ws.append([e.get('field',''), e.get('value','')])
+    wb.save(LOOKUPS_PATH)
+    return {'success': True}

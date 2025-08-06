@@ -932,3 +932,10 @@ body, html {
     width: 100%;
   }
 }
+
+/* Make the optimization results area scrollable */
+#optimization .opt-container {
+  max-height: 60vh;      /* limit height to 60% of viewport */
+  overflow-y: auto;      /* vertical scrollbar when needed */
+  padding: 0.5em;        /* optional breathing room */
+}

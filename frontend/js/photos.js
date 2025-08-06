@@ -1,6 +1,30 @@
 /**
 * Call this *after* station_snippet.html is injected and the Photos tab is made active.
 */
+
+
+// ─── Photo streaming support ───────────────────────────────────────────────
+// Buffers incoming base64 chunks per image
+const photoStreams = {};
+
+// Called by Python/Eel for each chunk
+function receive_photo_chunk(uid, chunk) {
+  if (photoStreams[uid]) photoStreams[uid].chunks.push(chunk);
+};
+
+eel.expose(receive_photo_chunk);
+
+// Called by Python/Eel when the stream is complete
+function receive_photo_done(uid) {
+  const entry = photoStreams[uid];
+  if (!entry) return;
+  const { chunks, img } = entry;
+  img.src = `data:image/jpeg;base64,${chunks.join('')}`;
+  delete photoStreams[uid];
+};
+
++eel.expose(receive_photo_done);
+
 export async function loadPhotosTab() {
   console.log("[photos] loadPhotosTab()");
 
@@ -92,32 +116,21 @@ async function initPhotos() {
         labelDiv.textContent = child.name;
         li.append(iconDiv, labelDiv);
 
-        // Load thumbnail via Python → data:URL
-        ;(async () => {
-          try {
-            const dataUrl = await eel.get_photo_data(child.path)();
-            thumb.src = dataUrl || "";
-            if (!dataUrl) thumb.alt = "⚠️";
-          } catch (e) {
-            console.error("[photos] thumbnail load failed:", e);
-            thumb.alt = "⚠️";
-          }
+        // Stream thumbnail via Eel in small chunks
+        (() => {
+          const uid = `${Date.now()}_${Math.random()}`;
+          photoStreams[uid] = { chunks: [], img: thumb };
+          eel.stream_photo(child.path, uid);
         })();
+
 
         // On click, preview full image (reuse same dataUrl)
         li.addEventListener("click", async () => {
-          try {
-            const fullUrl = await eel.get_photo_data(child.path)();
-            if (fullUrl) {
-              img.src = fullUrl;
-              preview.style.display = "flex";
-            } else {
-              alert("Could not load image.");
-            }
-          } catch (e) {
-            console.error("[photos] full image load failed:", e);
-            alert("Could not load image.");
-          }
+          // Stream full‐size image via the same chunked mechanism
+          const uid = `${Date.now()}_${Math.random()}`;
+          photoStreams[uid] = { chunks: [], img: img };
+          eel.stream_photo(child.path, uid);
+          preview.style.display = "flex";
         });
 
       }

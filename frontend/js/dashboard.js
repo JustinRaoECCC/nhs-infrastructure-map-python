@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     rightPanel.style.display         = 'none';
     stationPlaceholder.style.display = 'none';
 
+    // Clear optimization results each time dashboard is shown
+    const optPane = dashPlaceholder.querySelector('#optimization .opt-container');
+    if (optPane) optPane.querySelectorAll('pre').forEach(p => p.remove());
+
     if (!dashPlaceholder.innerHTML.trim()) {
       const html = await fetch('dashboard.html').then(r => r.text());
       dashPlaceholder.innerHTML = html;
@@ -216,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ─── Populate “Applies To” by cloning filter-tree asset-type checkboxes ────
     function populateParamAssetFilter() {
       paramAssetFilter.innerHTML = '';
+      if (!filterTree) return; 
       filterTree.querySelectorAll('.filter-checkbox.asset-type').forEach(box => {
         const company   = box.dataset.company;
         const loc       = box.dataset.location;
@@ -361,10 +366,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // persist to lookups.xlsx via eel
       await eel.save_algorithm_parameters(rows)();
-      // immediately display the newly added parameter
-      paramContainer.appendChild(
-        makeDisplayRow({ parameter, condition, options })
-      );
+      // immediately display one row per Applies-To × the new options
+      applies.forEach(a => {
+        const applies_to  = `${a.company} → ${a.location} → ${a.assetType}`;
+        paramContainer.appendChild(
+          makeDisplayRow({
+            applies_to,
+            parameter,
+            condition,
+            max_weight: maxWeight,
+            options
+          })
+        );
+      });
+
       closeAddParamModal();
     });
 
@@ -394,6 +409,108 @@ document.addEventListener('DOMContentLoaded', () => {
       await eel.save_algorithm_parameters(toSave)();
       renderParamStats(toSave);
     });
+
+
+    const wpContainer       = dashPlaceholder.querySelector('#workplanContainer');
+    const constantsContainer= wpContainer.querySelector('#constantsContainer');
+    const saveWPBtn         = dashPlaceholder.querySelector('#saveWorkplanBtn');
+    const addConstBtn       = dashPlaceholder.querySelector('#addConstantBtn');
+
+    // ── Helper: build one “constant” row
+    function makeConstantRow(field='', value='') {
+      const row = document.createElement('div');
+      row.className = 'const-row';
+      row.style = 'display:flex; align-items:center; margin-bottom:0.5em;';
+      // field (no outline)
+      const fld = document.createElement('input');
+      fld.type = 'text'; fld.className = 'const-field';
+      fld.value = field; fld.placeholder = 'Field';
+      fld.style = 'border:none; flex:1; margin-right:0.5em;';
+      // value (boxed)
+      const val = document.createElement('input');
+      val.type = 'text'; val.className = 'const-value';
+      val.value = value; val.placeholder = 'Value';
+      val.style = 'flex:1; margin-right:0.5em;';
+      // delete btn
+      const del = document.createElement('button');
+      del.textContent = '×'; del.addEventListener('click', () => row.remove());
+      row.append(fld, val, del);
+      return row;
+    }
+
+
+    async function loadWorkplan() {
+      if (!wpContainer) return;
+      // load constants
+      const consts = await eel.get_workplan_constants()();
+      constantsContainer.innerHTML = '';
+      consts.forEach(c => constantsContainer.append(makeConstantRow(c.field, c.value||'')));
+      // existing dynamic table logic unchanged...
+      const params = await eel.get_algorithm_parameters()();
+
+      const hdrRow = dashPlaceholder.querySelector('#workplanHeaders');
+      hdrRow.innerHTML = '';
+      ['Site Name','Station Number','Operation', ...params.map(p => p.parameter)]
+        .forEach(text => {
+          const th = document.createElement('th');
+          th.textContent = text;
+          hdrRow.appendChild(th);
+        });
+      dashPlaceholder.querySelector('#workplanBody').innerHTML = '';
+    }
+
+    if (saveWPBtn) {
+      // Save constants back to Excel
+      saveWPBtn.addEventListener('click', async () => {
+        const toSave = Array.from(constantsContainer.querySelectorAll('.const-row'))
+          .map(r => ({
+            field: r.querySelector('.const-field').value.trim(),
+            value: r.querySelector('.const-value').value
+          }));
+        await eel.save_workplan_constants(toSave)();
+        // (you can still call save_workplan_details(...) here if you need that sheet)
+      });
+
+      // Add a new blank constant
+      addConstBtn.addEventListener('click', () => {
+        constantsContainer.append(makeConstantRow());
+      });
+    }
+
+    // ─── Optimize Workplan ────────────────────────────────────────────────
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    if (optimizeBtn) {
+      optimizeBtn.addEventListener('click', async () => {
+        // call backend
+        const result = await window.electronAPI.optimizeWorkplan();
+        console.log('Optimize result:', result);
+
+        // display under the button
+        const optPane = document.querySelector('#optimization .opt-container');
+        // clear any old output
+        optPane.querySelectorAll('pre').forEach(p => p.remove());
+
+        const pre = document.createElement('pre');
+        pre.style.marginTop = '1em';
+        pre.textContent = JSON.stringify(result, null, 2);
+        optPane.appendChild(pre);
+      });
+    }
+
+    // Whenever any dashboard tab other than “Optimization” is clicked, clear its results
+    const tabss = document.querySelectorAll('.dashboard-tab');
+    tabss.forEach(tab => {
+      tab.addEventListener('click', () => {
+        if (tab.dataset.target !== 'optimization') {
+          const optPaneInner = document.querySelector('#optimization .opt-container');
+          if (optPaneInner) {
+            optPaneInner.querySelectorAll('pre').forEach(p => p.remove());
+          }
+        }
+      });
+    });
+
+
   }
 
   // ─── Station switcher (unchanged) ───────────────────────────────────────
@@ -409,39 +526,4 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStationPage(stationId);
   });
 
-  // ─── Workplan loader & saver (unchanged) ────────────────────────────────
-  const wpContainer = dashPlaceholder.querySelector('#workplanContainer');
-  const wpInputs    = wpContainer
-    ? Array.from(wpContainer.querySelectorAll('.wp-value'))
-    : [];
-  const saveWPBtn = dashPlaceholder.querySelector('#saveWorkplanBtn');
-
-  async function loadWorkplan() {
-    if (!wpContainer) return;
-    const entries = await eel.get_workplan_details()();
-    entries.forEach(e => {
-      const inp = wpContainer.querySelector(`.wp-value[data-key="${e.parameter}"]`);
-      if (inp) inp.value = e.value ?? '';
-    });
-    const params = await eel.get_algorithm_parameters()();
-    const hdrRow = dashPlaceholder.querySelector('#workplanHeaders');
-    hdrRow.innerHTML = '';
-    ['Site Name','Station Number','Operation', ...params.map(p => p.parameter)]
-      .forEach(text => {
-        const th = document.createElement('th');
-        th.textContent = text;
-        hdrRow.appendChild(th);
-      });
-    dashPlaceholder.querySelector('#workplanBody').innerHTML = '';
-  }
-
-  if (saveWPBtn) {
-    saveWPBtn.addEventListener('click', async () => {
-      const out = wpInputs.map(inp => ({
-        parameter: inp.dataset.key,
-        value:     inp.value
-      }));
-      await eel.save_workplan_details(out)();
-    });
-  }
 });
