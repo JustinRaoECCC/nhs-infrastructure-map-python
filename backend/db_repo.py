@@ -39,6 +39,10 @@ class Repair(Base):
     ranking    = Column(Integer)
     cost       = Column(Float)
     frequency  = Column(String)
+    name       = Column(String)
+    severity   = Column(Integer)
+    priority   = Column(Integer)
+    category   = Column(String)
     station    = relationship("Station", back_populates="repairs")
 
 class DBRepo(BaseRepo):
@@ -147,8 +151,11 @@ class DBRepo(BaseRepo):
         with self.Session() as s:
             r = Repair(
                 station_id=station_id,
-                ranking=repair.get("ranking", 0),
+                name=repair.get("name", ""),
+                severity=repair.get("severity", 0),
+                priority=repair.get("priority", 0),
                 cost=repair.get("cost", 0.0),
+                category=repair.get("category", ""),
                 frequency=repair.get("freq", ""),
             )
             s.add(r)

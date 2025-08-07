@@ -8,6 +8,151 @@ let currentStation = null;
 function wireUpStationEventHandlers() {
   console.log('🔧 wireUpStationEventHandlers invoked');
 
+  let resolveMode = false;
+  const resolveBtn = document.getElementById('btnResolveRepairs');
+  const repairsTable = document.getElementById('existingRepairsTable');
+
+  resolveBtn.addEventListener('click', () => {
+    resolveMode = !resolveMode;
+    resolveBtn.textContent = resolveMode ? 'Exit Resolve Mode' : 'Resolve Repairs';
+    // toggle a CSS class so rows highlight on hover
+    repairsTable.classList.toggle('resolve-mode', resolveMode);
+  });
+
+  // when in resolveMode, clicking a row toggles selection
+  repairsTable.querySelector('tbody').addEventListener('click', e => {
+    if (!resolveMode) return;
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    tr.classList.toggle('selected');
+  });
+
+  // ── High-Priority Repairs UI wiring ──────────────────────────────────────
+  const addRepairBtn         = document.getElementById('btnAddRepair');
+  const addRepairModal       = document.getElementById('addRepairModal');
+  const closeAddRepairModal  = document.getElementById('closeAddRepairModal');
+  const confirmAddRepair     = document.getElementById('confirmAddRepair');
+  const repairFormsContainer = document.getElementById('repairFormsContainer');
+  const saveRepairsBtn       = document.getElementById('btnSaveRepairs');
+  let   repairList = [];
+
+  addRepairBtn.addEventListener('click', () => {
+    // Clear previous inputs each time the modal opens
+    document.getElementById('inputRepairName').value = '';
+    document.getElementById('inputSeverityRanking').value = '';
+    document.getElementById('inputPriorityRanking').value = '';
+    document.getElementById('inputRepairCost').value = '';
+    document.getElementById('selectRepairCategory').value = 'Capital';
+    addRepairModal.style.display = 'flex';
+  });
+
+
+  closeAddRepairModal.addEventListener('click', () => {
+    addRepairModal.style.display = 'none';
+  });
+  confirmAddRepair.addEventListener('click', () => {
+    const name     = document.getElementById('inputRepairName').value.trim();
+    const severity = parseInt(document.getElementById('inputSeverityRanking').value, 10) || 0;
+    const priority = parseInt(document.getElementById('inputPriorityRanking').value, 10) || 0;
+    const cost     = parseFloat(document.getElementById('inputRepairCost').value) || 0;
+    const category = document.getElementById('selectRepairCategory').value;
+    if (!name) return alert('Please enter a repair name.');
+    // Build the siteName as the station number only
+    const pageName = `${currentStation.station_id}`;
+    const r = {
+      siteName:  pageName,
+      name:      name,
+      severity:  severity,
+      priority:  priority,
+      cost:      cost,
+      category:  category
+    };
+    repairList.push(r);
+    const entry = document.createElement('div');
+    entry.className = 'repair-entry';
+    entry.textContent =
+      `${r.name} (Sev:${r.severity}, Pri:${r.priority}, Cost:${r.cost}, ${r.category})`;
+    repairFormsContainer.appendChild(entry);
+    addRepairModal.style.display = 'none';
+  });
+
+  saveRepairsBtn.addEventListener('click', async () => {
+
+    if (resolveMode) {
+      // collect selected rows
+      const selected = Array.from(
+        document.querySelectorAll('#existingRepairsTable tbody tr.selected')
+      );
+      // for each, compute the data-row index
+      // tr.rowIndex is global in the table; subtract header row:
+      // grab all <tr> in the TBODY once
+      const tbodyEl = document
+        .getElementById('existingRepairsTable')
+        .querySelector('tbody');
+      const allRows = Array.from(tbodyEl.querySelectorAll('tr'));
+      for (let tr of selected) {
+        // find 1-based position among data rows
+      const dataIdx = allRows.indexOf(tr) + 1;
+        await window.electronAPI.deleteRepair(
+          currentStation.station_id,
+          dataIdx
+        );
+      }
+
+      // exit resolve mode
+      resolveMode = false;
+      resolveBtn.textContent = 'Resolve Repairs';
+      repairsTable.classList.remove('resolve-mode');
+
+      // refresh the table
+      const tbody = document.querySelector('#existingRepairsTable tbody');
+      const repairs = await window.electronAPI.getRepairs(currentStation.station_id);
+      tbody.innerHTML = '';
+      repairs.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r['Repair Name']}</td>
+          <td>${r['Severity Ranking']}</td>
+          <td>${r['Priority Ranking']}</td>
+          <td>${r['Repair Cost']}</td>
+          <td>${r['Category']}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      return;
+    }
+
+    // Send each queued repair (including siteName) to the backend
+    for (let r of repairList) {
+      await window.electronAPI.createNewRepair(
+        currentStation.station_id,
+        r
+      );
+    }
+
+    repairList = [];
+    repairFormsContainer.innerHTML = '';
+    alert('Repairs saved successfully!');
+
+    // Refresh the repairs table immediately
+    const tbody = document.querySelector('#existingRepairsTable tbody');
+    const repairs = await window.electronAPI.getRepairs(currentStation.station_id);
+    tbody.innerHTML = '';
+    repairs.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r['Repair Name']}</td>
+        <td>${r['Severity Ranking']}</td>
+        <td>${r['Priority Ranking']}</td>
+        <td>${r['Repair Cost']}</td>
+        <td>${r['Category']}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  });
+
+
   // ── Tab switching ─────────────────────────────────────────────────────────
   document.querySelectorAll('.tab').forEach(tab => {
     console.log(`   ⚙️ binding tab click for “[${tab.dataset.target}]”`);
@@ -129,6 +274,24 @@ async function loadStationPage(stationId) {
 
   // ── 6) Inject the snippet into the now-visible container
   container.innerHTML = stationSnippet;
+
+  // ─── Load existing repairs into the table ───────────────────────────────
+  {
+    const tbody   = document.querySelector('#existingRepairsTable tbody');
+    const repairs = await window.electronAPI.getRepairs(stationId);
+    tbody.innerHTML = '';
+    repairs.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r['Repair Name']}</td>
+        <td>${r['Severity Ranking']}</td>
+        <td>${r['Priority Ranking']}</td>
+        <td>${r['Repair Cost']}</td>
+        <td>${r['Category']}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
 
   // ── 7) Reset edit-mode UI state
   unlocked = false;

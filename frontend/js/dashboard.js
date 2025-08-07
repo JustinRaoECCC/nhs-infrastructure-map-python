@@ -91,8 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
         </select>
         <select class="param-options"></select>
         <span class="param-weight-display"></span>
+        <input type="number"
+              class="param-percentage"
+              min="0" max="100" value="0"
+              style="width:60px; margin-left:0.5em;"
+              title="Enter % (total should sum to 100)" />%
         <button class="deleteParamBtn">×</button>
       `;
+
 
 
       // fill & disable condition dropdown
@@ -127,6 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
       optSel.addEventListener('change', () => {
         weightDisplay.textContent = optSel.value;
       });
+
+      // when percentage changes, recalc total
+      const pctInput = row.querySelector('.param-percentage');
+      pctInput.addEventListener('input', recalcPercentageTotal);
 
       row.querySelector('.deleteParamBtn')
          .addEventListener('click', () => row.remove());
@@ -366,19 +376,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // persist to lookups.xlsx via eel
       await eel.save_algorithm_parameters(rows)();
-      // immediately display one row per Applies-To × the new options
-      applies.forEach(a => {
-        const applies_to  = `${a.company} → ${a.location} → ${a.assetType}`;
-        paramContainer.appendChild(
-          makeDisplayRow({
-            applies_to,
-            parameter,
-            condition,
-            max_weight: maxWeight,
-            options
-          })
-        );
-      });
+      // immediately display a single row for the new parameter across all Applies-To
+      const applies_to_str = applies
+        .map(a => `${a.company} → ${a.location} → ${a.assetType}`)
+        .join(', ');
+      paramContainer.appendChild(
+        makeDisplayRow({
+          applies_to: applies_to_str,
+          parameter,
+          condition,
+          max_weight: maxWeight,
+          options
+        })
+      );
+
 
       closeAddParamModal();
     });
@@ -510,7 +521,17 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    recalcPercentageTotal();
+  }
 
+  function recalcPercentageTotal() {
+    const all = document.querySelectorAll('.param-percentage');
+    let sum = 0;
+    all.forEach(inp => { sum += parseInt(inp.value,10) || 0; });
+    const el = document.getElementById('percentageTotal');
+    el.textContent = sum;
+    // optional: highlight in red if not exactly 100
+    el.style.color = sum === 100 ? '' : 'red';
   }
 
   // ─── Station switcher (unchanged) ───────────────────────────────────────

@@ -12,9 +12,9 @@ from openpyxl.styles import Alignment, Font
 
 # ─── Paths & constants ──────────────────────────────────────────────────────
 HERE = os.path.dirname(__file__)
-DATA_DIR = os.path.abspath(os.path.join(HERE, '..', 'data'))
-ASSET_TYPES_DIR = os.path.join(DATA_DIR, 'asset_types')
-LOOKUPS_PATH = os.path.join(DATA_DIR, 'lookups.xlsx')
+DATA_DIR        = os.path.abspath(os.path.join(HERE, '..', 'data'))
+REPAIRS_DIR     = os.path.join(DATA_DIR, 'repairs')
+LOOKUPS_PATH    = os.path.join(DATA_DIR, 'lookups.xlsx')
 LOCATIONS_DIR   = os.path.join(DATA_DIR, 'locations')
 
 # Random color generator
@@ -33,8 +33,8 @@ def _get_lock(key: str):
 # ─── Ensure data folder & lookups.xlsx exist and are well‑formed ────────────
 def ensure_data_folder():
     os.makedirs(DATA_DIR,        exist_ok=True)
-    os.makedirs(ASSET_TYPES_DIR, exist_ok=True)
     os.makedirs(LOCATIONS_DIR,   exist_ok=True)
+    os.makedirs(REPAIRS_DIR,     exist_ok=True)
 
 def ensure_lookups_file():
     """
@@ -189,13 +189,12 @@ def add_new_location(new_loc: str) -> bool:
     added = append_to_lookup('Locations', new_loc)
     if not added:
         return False
-    # create a workbook for this location with one sheet per existing asset-type
-    path = os.path.join(LOCATIONS_DIR, f'{new_loc}.xlsx')
+    # create the locations workbook
+    loc_path = os.path.join(LOCATIONS_DIR, f'{new_loc}.xlsx')
     wb = Workbook()
-    # leave the default sheet in place (blank) for now;
-    # asset-type sheets will be added when Confirm Asset Type is clicked
-    wb.save(path)
+    wb.save(loc_path)
     return True
+
 
 def get_asset_types() -> list[str]:
     return read_lookup_list('AssetTypes')
@@ -265,8 +264,8 @@ def delete_all_data_files() -> dict:
         if os.path.basename(p) == 'lookups.xlsx':
             try: os.remove(p)
             except: pass
-    # remove all asset‑type workbooks
-    for p in glob.glob(os.path.join(ASSET_TYPES_DIR, '*.xlsx')):
+    # remove all repair workbooks
+    for p in glob.glob(os.path.join(REPAIRS_DIR, '*.xlsx')):
         try: os.remove(p)
         except: pass
     # recreate lookups (but asset_types dir stays)

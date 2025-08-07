@@ -4,7 +4,7 @@ import os
 import glob
 import sys
 import eel
-from .lookups_manager import DATA_DIR, ASSET_TYPES_DIR, LOCATIONS_DIR
+from .lookups_manager import DATA_DIR, LOCATIONS_DIR, REPAIRS_DIR
 from .config import DB_URL
 
 @eel.expose
@@ -22,7 +22,7 @@ def data_nuke():
     patterns = [
         os.path.join(DATA_DIR, '*.xlsx'),
         os.path.join(DATA_DIR, '*.db'),
-        os.path.join(ASSET_TYPES_DIR, '*.xlsx'),
+        os.path.join(REPAIRS_DIR, '*.xlsx'),
         os.path.join(LOCATIONS_DIR, '*.xlsx'),
         os.path.join(DATA_DIR, 'repairs', '*.xlsx'),
     ]

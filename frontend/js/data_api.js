@@ -40,6 +40,11 @@ window.electronAPI = {
     return res;
   },
 
+  createNewRepair:        async (stationId, repairObj) => eel.create_new_repair(stationId, repairObj)(),
+  getRepairs: stationId => eel.get_repairs(stationId)(),
+  deleteRepair: async (stationId, rowIndex) =>
+    eel.delete_repair(stationId, rowIndex)(),
+
   // — Company & filters —
   getCompanies:                ()                      => eel.get_companies()(),
   addNewCompany:               (name, active = false) => eel.add_new_company(name, active)(),

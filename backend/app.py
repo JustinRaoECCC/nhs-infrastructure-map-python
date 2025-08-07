@@ -383,6 +383,17 @@ def optimize_workplan():
     # 3) Return back to JS
     return result
 
+@eel.expose
+def get_repairs(station_id: str):
+    from .repairs_manager import list_repairs
+    return list_repairs(station_id)
+
+@eel.expose
+def delete_repair(station_id: str, row_index: int):
+    from .repairs_manager import delete_repair as rm_delete
+    return rm_delete(station_id, row_index)
+
+
 # ─── App startup ────────────────────────────────────────────────────────────
 def main():
     eel.init('frontend')
