@@ -1,29 +1,29 @@
 /**
-* Call this *after* station_snippet.html is injected and the Photos tab is made active.
-*/
++ * Call this *after* station_snippet.html is injected and the Photos tab is made active.
++ */
 
+import { streamImageTo } from './image_stream.js';
 
-// ─── Photo streaming support ───────────────────────────────────────────────
-// Buffers incoming base64 chunks per image
-const photoStreams = {};
+// -----------------------------------------------------------------------------
+// Shared image loader so ALL tabs (Photos + History) fetch images the same way.
+// - Uses eel.get_photo_chunks(path)
+// - Caches data URLs to avoid re-fetching the same file repeatedly
+// -----------------------------------------------------------------------------
+const __photoCache = (window.__photoCache ||= new Map());
 
-// Called by Python/Eel for each chunk
-function receive_photo_chunk(uid, chunk) {
-  if (photoStreams[uid]) photoStreams[uid].chunks.push(chunk);
-};
-
-eel.expose(receive_photo_chunk);
-
-// Called by Python/Eel when the stream is complete
-function receive_photo_done(uid) {
-  const entry = photoStreams[uid];
-  if (!entry) return;
-  const { chunks, img } = entry;
-  img.src = `data:image/jpeg;base64,${chunks.join('')}`;
-  delete photoStreams[uid];
-};
-
-+eel.expose(receive_photo_done);
+export async function getPhotoDataUrl(path) {
+  if (!path) return '';
+  if (__photoCache.has(path)) return __photoCache.get(path);
+  try {
+    const chunks = await eel.get_photo_chunks(path)();
+    const url = `data:image/jpeg;base64,${(chunks || []).join('')}`;
+    __photoCache.set(path, url);
+    return url;
+  } catch (e) {
+    console.error('[photos] getPhotoDataUrl failed for', path, e);
+    return '';
+  }
+}
 
 export async function loadPhotosTab() {
   console.log("[photos] loadPhotosTab()");
@@ -116,20 +116,13 @@ async function initPhotos() {
         labelDiv.textContent = child.name;
         li.append(iconDiv, labelDiv);
 
-        // Stream thumbnail via Eel in small chunks
-        (() => {
-          const uid = `${Date.now()}_${Math.random()}`;
-          photoStreams[uid] = { chunks: [], img: thumb };
-          eel.stream_photo(child.path, uid);
-        })();
+        // Stream thumbnail via Eel in small chunks (same helper used by history tabs)
+        streamImageTo(thumb, child.path);
 
 
-        // On click, preview full image (reuse same dataUrl)
+        // On click, preview full image (same streaming helper)
         li.addEventListener("click", async () => {
-          // Stream full‐size image via the same chunked mechanism
-          const uid = `${Date.now()}_${Math.random()}`;
-          photoStreams[uid] = { chunks: [], img: img };
-          eel.stream_photo(child.path, uid);
+          streamImageTo(img, child.path);
           preview.style.display = "flex";
         });
 

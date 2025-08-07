@@ -250,7 +250,7 @@ class DBRepo(BaseRepo):
                 "companies": companies,
                 "locations": locations,
                 "asset_type"
-                "s": asset_types
+                "asset_types": asset_types,
             }
         
     def update_station(self, station_obj: dict):

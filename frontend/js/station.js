@@ -167,11 +167,19 @@ function wireUpStationEventHandlers() {
 
       // if Photos tab, load the Photos UI
       if (tab.dataset.target === 'photos') {
-        console.log('[station] Photos tab activated, loading photos.js');
         import('./photos.js')
           .then(mod => mod.loadPhotosTab())
           .catch(err => console.error('[station] failed to load photos.js:', err));
+      } else if (tab.dataset.target === 'inspection-history') {
+        import('./history.js')
+          .then(mod => mod.loadHistoryTab('inspection'))
+          .catch(err => console.error('[station] failed to load history.js (inspection):', err));
+      } else if (tab.dataset.target === 'construction-history') {
+        import('./history.js')
+          .then(mod => mod.loadHistoryTab('construction'))
+          .catch(err => console.error('[station] failed to load history.js (construction):', err));
       }
+
     });
   });
 
@@ -255,6 +263,7 @@ async function loadStationPage(stationId) {
     return;
   }
   currentStation = stn;
+  window.currentStationData = stn;
 
   // ── 5) Everything’s ready—hide loader, then swap into details view
   hideLoaderOverlay();

@@ -126,7 +126,7 @@ def read_lookup_list(sheet_name: str) -> list[str]:
             ws['C1'] = 'color'
         else:
             # for sheets like "Companies" or "Custom Weights"
-            ws['A1'] = sheet_name.slice(0, -1).toLowerCase()
+            ws['A1'] = sheet_name.rstrip('s').lower().replace(' ', '_')
         wb.save(LOOKUPS_PATH)
         return []
 
