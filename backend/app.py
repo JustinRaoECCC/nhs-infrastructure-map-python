@@ -243,26 +243,44 @@ def delete_station(station_id):
     return dm.delete_station(station_id)
 
 @eel.expose
-def list_photos(root_dir: str):
-    """
-    Walk `root_dir` and return a nested dict:
-    { name: <str>, type: 'folder', children: [ ... ] }
-    or { name: <str>, type: 'file', path: <full_path> } for images.
-    """
-    tree = {"name": os.path.basename(root_dir),
-            "type": "folder",
-            "children": []}
-    for entry in sorted(os.listdir(root_dir)):
+def list_photos(root_dir: str, include_reports: bool = False):
+    # Include absolute path and folder mtime so the UI can sort by "newest first"
+    try:
+        mtime = os.path.getmtime(root_dir)
+    except Exception:
+        mtime = 0
+    tree = {
+        "name": os.path.basename(root_dir),
+        "type": "folder",
+        "path": root_dir,
+        "mtime_ts": mtime,
+        "children": []
+    }
+    try:
+        entries = sorted(os.listdir(root_dir))
+    except Exception:
+        return tree  # return empty if path missing or unreadable
+
+    allow_exts = {"png","jpg","jpeg","gif","bmp"}
+    if include_reports:
+        allow_exts |= {"pdf","txt"}
+
+    for entry in entries:
         full = os.path.join(root_dir, entry)
         if os.path.isdir(full):
-            tree["children"].append(list_photos(full))
+            tree["children"].append(list_photos(full, include_reports))
         else:
-            ext = entry.lower().rsplit(".",1)[-1]
-            if ext in ("png","jpg","jpeg","gif","bmp"):
+            ext = entry.rsplit(".", 1)[-1].lower()
+            if ext in allow_exts:
+                try:
+                    f_mtime = os.path.getmtime(full)
+                except Exception:
+                    f_mtime = 0
                 tree["children"].append({
                     "name": entry,
                     "type": "file",
-                    "path": full
+                    "path": full,
+                    "mtime_ts": f_mtime
                 })
     return tree
 
@@ -393,6 +411,141 @@ def delete_repair(station_id: str, row_index: int):
     from .repairs_manager import delete_repair as rm_delete
     return rm_delete(station_id, row_index)
 
+@eel.expose
+def delete_dir(path: str) -> dict:
+    """
+    Recursively delete a directory (or file) at `path`.
+    Returns {success: bool, message?: str}.
+    """
+    import os, shutil, stat
+
+    def _on_rm_error(func, p, exc_info):
+        # Handle read-only files on Windows by making them writable then retrying
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:
+            pass
+
+    try:
+        if not os.path.exists(path):
+            return {"success": False, "message": "Path not found"}
+        if os.path.isdir(path):
+            shutil.rmtree(path, onerror=_on_rm_error)
+        else:
+            os.remove(path)
+        return {"success": True}
+    except Exception as e:
+        print("delete_dir error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def save_file_from_base64(dest_path: str, b64_data: str) -> dict:
+    """
+    Create/overwrite `dest_path` with bytes from base64 string (no data: prefix).
+    """
+    import os, base64
+    try:
+        os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
+        with open(dest_path, "wb") as f:
+            f.write(base64.b64decode(b64_data))
+        return {"success": True}
+    except Exception as e:
+        print("save_file_from_base64 error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def save_files_from_base64(files: list, dest_dir: str) -> dict:
+    """
+    Write multiple files into dest_dir. Each item: {"name": str, "b64": str}
+    """
+    import os, base64
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        count = 0
+        for item in (files or []):
+            name = str(item.get("name") or "").strip()
+            data = item.get("b64") or ""
+            if not name or not data:
+                continue
+            out = os.path.join(dest_dir, name)
+            with open(out, "wb") as f:
+                f.write(base64.b64decode(data))
+            count += 1
+        return {"success": True, "saved": count}
+    except Exception as e:
+        print("save_files_from_base64 error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def ensure_dir(path: str) -> dict:
+    import os
+    try:
+        os.makedirs(path, exist_ok=True)
+        return {"success": True}
+    except Exception as e:
+        print("ensure_dir error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def write_text_file(path: str, text: str) -> dict:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text or "")
+        return {"success": True}
+    except Exception as e:
+        print("write_text_file error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def read_text_file(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        print("read_text_file error:", e)
+        return ""
+
+@eel.expose
+def copy_file(src: str, dest: str) -> dict:
+    import shutil, os
+    try:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(src, dest)
+        return {"success": True}
+    except Exception as e:
+        print("copy_file error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def copy_files(src_list: list, dest_dir: str) -> dict:
+    import shutil, os
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        count = 0
+        for s in (src_list or []):
+            if not s: continue
+            shutil.copy2(s, os.path.join(dest_dir, os.path.basename(s)))
+            count += 1
+        return {"success": True, "copied": count}
+    except Exception as e:
+        print("copy_files error:", e)
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def open_file_natively(path: str) -> dict:
+    import os, subprocess, sys
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)            # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+        return {"success": True}
+    except Exception as e:
+        print("open_file_natively error:", e)
+        return {"success": False, "message": str(e)}
 
 # ─── App startup ────────────────────────────────────────────────────────────
 def main():

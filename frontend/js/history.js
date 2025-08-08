@@ -10,7 +10,14 @@ import { streamImageTo } from './image_stream.js';
 const IMG_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
 const PDF_RE = /\.pdf$/i;
 
-const SERVER_STATIONS_ROOT = '\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\';
+// ── Debug helper (toggle on/off here) ──────────────────────────────────────
+const HIST_DEBUG = true;
+function dlog(...args) {
+  if (HIST_DEBUG) console.log('[history:debug]', ...args);
+}
+
+// const SERVER_STATIONS_ROOT = '\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\';
+const SERVER_STATIONS_ROOT = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\`;
 
 // Name-based classification fallback
 const IS_INSPECTION_NAME = /(inspection|assessment|site\s*visit|sitevisit|visit)/i;
@@ -22,7 +29,66 @@ const SKIP_NAME = /email/i;
 
 // Form state (kept simple)
 let pendingPhotos = [];
-let pendingPdf = '';
+let pendingPdf = null;
+
+/**
+ * Keep DOM children sorted newest→oldest by dataset keys.
+ * Uses:
+ *   data-sort-key (YYYYMMDDnn pattern as number, higher = newer)
+ *   data-mtime    (mtime fallback as number)
+ *   data-name     (stable tiebreak)
+ */
+function ensureSortedHistoryList(rootEl) {
+  if (!rootEl) return;
+  const kids = Array.from(rootEl.children || []);
+  if (kids.length < 2) return;
+
+  kids.sort((a, b) => {
+    const ka = +(a.dataset.sortKey || 0);
+    const kb = +(b.dataset.sortKey || 0);
+    if (ka !== kb) return kb - ka; // newest first
+    const ma = +(a.dataset.mtime || 0);
+    const mb = +(b.dataset.mtime || 0);
+    if (ma !== mb) return mb - ma;
+    const na = a.dataset.name || '';
+    const nb = b.dataset.name || '';
+    return na.localeCompare(nb, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  // Only reflow if the order actually changed
+  let changed = false;
+  for (let i = 0; i < kids.length; i++) {
+    if (rootEl.children[i] !== kids[i]) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) return;
+
+  if (HIST_DEBUG) dlog('ensureSortedHistoryList() → reflowing');
+  const frag = document.createDocumentFragment();
+  kids.forEach(n => frag.appendChild(n));
+  rootEl.innerHTML = '';
+  rootEl.appendChild(frag);
+}
+
+/**
+ * Calculate the numeric sort key for a folder node.
+ * Prefers the same logic used during the initial list build (dateKey(name)).
+ * Falls back to any existing node.sortKey or 0.
+ */
+function _calcSortKeyFromNode(folderNode) {
+  if (!folderNode) return 0;
+  try {
+    // If dateKey(name) exists in this module, reuse it for consistency.
+    if (typeof dateKey === 'function') {
+      const k = +dateKey(String(folderNode.name || ''));
+      if (Number.isFinite(k)) return k;
+    }
+  } catch {}
+  const k2 = +(folderNode.sortKey || 0);
+  return Number.isFinite(k2) ? k2 : 0;
+}
 
 /**
  * Entry point called by station.js when a history tab is activated.
@@ -55,7 +121,7 @@ export async function loadHistoryTab(kind) {
   // Ask Python for the directory tree
   let tree;
   try {
-    tree = await eel.list_photos(rootPath)();
+    tree = await eel.list_photos(rootPath, true)();
   } catch (e) {
     console.error('[history] list_photos failed', e);
     renderEmpty(rootEl, 'Could not list photos.');
@@ -80,23 +146,37 @@ export async function loadHistoryTab(kind) {
   const topFolders = tree.children.filter((ch) => ch.type === 'folder');
 
   // Build lightweight descriptors with classification helpers
+
+  if (HIST_DEBUG) {
+    dlog(`Found ${topFolders.length} top-level folders for ${kind}`);
+  }
+
   const enriched = await Promise.all(
     topFolders.map(async (f) => ({
       node: f,
       name: f.name || '',
       path: f.path || buildNodePath(tree, f) || null,
+      mtime: Number(f.mtime_ts || 0),   // ← from backend, for instant “newest first”
       // quick checks to avoid showing undesired folders
-      skip:
-        SKIP_DIR.test(f.name) ||
-        SKIP_NAME.test(f.name), // hide "email"
+      skip: SKIP_DIR.test(f.name) || SKIP_NAME.test(f.name), // hide "email"
       // Determine if this folder should be shown in "inspection"
       // Heuristics:
       //  - folder name looks like inspection, OR
       //  - contains a PDF with "inspection" in the name, OR
       //  - contains note.txt that has "Inspector:" line
       looksInspection: await looksLikeInspectionFolder(f),
+      // Numeric key for sorting (YYYYMMDD). Missing month/day default to 12/31.
+      sortKey: _dateKeyFromName_hist(f.name)
     }))
+
   );
+
+  if (HIST_DEBUG) {
+    dlog('Folders + derived keys:');
+    console.table(enriched.map(x => ({
+      name: x.name, looksInspection: x.looksInspection, sortKey: x.sortKey, mtime: x.mtime
+    })));
+  }
 
   const selected = enriched.filter((x) => {
     if (x.skip) return false;
@@ -115,13 +195,46 @@ export async function loadHistoryTab(kind) {
     return;
   }
 
-  // Sort by name (assumes leading year) newest first
-  selected
+  if (HIST_DEBUG) {
+    dlog(`${kind} → selected BEFORE sort:`);
+    console.table(selected.map(x => ({ name: x.name, sortKey: x.sortKey, mtime: x.mtime })));
+  }
+
+  let __cmpCount = 0;
+  const ordered = selected
     .slice()
-    .sort((a, b) => b.name.localeCompare(a.name))
-    .forEach((wrap) => {
-      renderHistoryFolder(kind, rootEl, wrap.node);
+    .sort((a, b) => {
+      const ka = a.sortKey || 0;  // derived from name, 0 if missing
+      const kb = b.sortKey || 0;
+      let result;
+      if (ka === 0 || kb === 0) {
+        // If either failed to parse a date, fall back to mtime first
+        result = (a.mtime !== b.mtime)
+          ? (b.mtime - a.mtime)
+          : a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      } else if (ka !== kb) {
+        result = kb - ka; // newest derived date first
+      } else if (a.mtime !== b.mtime) {
+        result = b.mtime - a.mtime;
+      } else {
+        result = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      }
+      if (HIST_DEBUG && __cmpCount < 30) dlog('cmp', { a: a.name, ka }, 'vs', { b: b.name, kb }, '→', result);
+      __cmpCount++;
+      return result;
     });
+
+  if (HIST_DEBUG) {
+    dlog(`${kind} → AFTER sort:`);
+    console.table(ordered.map(x => ({ name: x.name, sortKey: x.sortKey, mtime: x.mtime })));
+  }
+
+  ordered.forEach((wrap) => {
+    renderHistoryFolder(kind, rootEl, wrap.node);
+  });
+
+  // defensive: keep DOM sorted even if other code appended out of order
+  ensureSortedHistoryList(rootEl);
 }
 
 /* ───────────────────────── UI: Action Bar & Modal ───────────────────────── */
@@ -142,7 +255,7 @@ function renderActionBar(rootEl, kind) {
 function openAddModal(kind) {
   // Reset pending selections
   pendingPhotos = [];
-  pendingPdf = '';
+  pendingPdf = null;
 
   const modal = document.createElement('div');
   modal.className = 'history-modal';
@@ -194,6 +307,7 @@ function openAddModal(kind) {
   const cancel = document.createElement('button');
   cancel.textContent = 'Cancel';
   const save = document.createElement('button');
+  save.type = 'button'; 
   save.textContent = 'Create';
   save.style = 'font-weight:600;';
 
@@ -202,39 +316,66 @@ function openAddModal(kind) {
   modal.appendChild(card);
   document.body.appendChild(modal);
 
+  // Hidden <input type="file"> controls (match Excel import pattern)
+  const photoInput = document.createElement('input');
+  photoInput.type = 'file';
+  photoInput.accept = 'image/*';
+  photoInput.multiple = true;
+  photoInput.style.display = 'none';
+  card.appendChild(photoInput);
+
+  const pdfInput = document.createElement('input');
+  pdfInput.type = 'file';
+  pdfInput.accept = 'application/pdf';
+  pdfInput.style.display = 'none';
+  card.appendChild(pdfInput);
+
+  async function fileToBase64(file) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }
+
   // Wire buttons
   const photosBtn = card.querySelector('#h-pick-photos');
   const photosLbl = card.querySelector('#h-photos-count');
-  photosBtn.addEventListener('click', async () => {
-    try {
-      const files = await eel.pick_images()(); // returns list[str absolute paths]
-      if (Array.isArray(files)) {
-        pendingPhotos = files;
-        photosLbl.textContent =
-          files.length === 0 ? 'No files selected' : `${files.length} photo(s) selected`;
-      }
-    } catch (e) {
-      console.error('pick_images failed', e);
-      alert('Could not open photo picker.');
-    }
+
+  photosBtn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    photoInput.click();
   });
+  photoInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) {
+      pendingPhotos = [];
+      photosLbl.textContent = 'No files selected';
+      return;
+    }
+    pendingPhotos = await Promise.all(
+      files.map(async f => ({ name: f.name, b64: await fileToBase64(f) }))
+    );
+    photosLbl.textContent = `${pendingPhotos.length} photo(s) selected`;
+  });
+
 
   const pdfBtn = card.querySelector('#h-pick-pdf');
   const pdfLbl = card.querySelector('#h-pdf-name');
-  pdfBtn.addEventListener('click', async () => {
-    try {
-      const picked = await eel.pick_pdf()(); // returns string absolute path or ''
-      if (picked && typeof picked === 'string') {
-        pendingPdf = picked;
-        pdfLbl.textContent = basename(picked);
-      } else {
-        pendingPdf = '';
-        pdfLbl.textContent = 'None';
-      }
-    } catch (e) {
-      console.error('pick_pdf failed', e);
-      alert('Could not open PDF picker.');
+
+  pdfBtn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    pdfInput.click();
+  });
+  pdfInput.addEventListener('change', async (e) => {
+    const f = (e.target.files || [])[0];
+    if (!f) {
+      pendingPdf = null;
+      pdfLbl.textContent = 'None';
+      return;
     }
+    pendingPdf = { name: f.name, b64: await fileToBase64(f) };
+    pdfLbl.textContent = basename(f.name);
   });
 
   cancel.addEventListener('click', () => modal.remove());
@@ -273,14 +414,14 @@ function openAddModal(kind) {
       const noteText = `Inspector: ${inspector || ''}\nComment: ${comment || ''}\n`;
       await eel.write_text_file(notePath, noteText)();
 
-      // Copy photos
+      // Save photos (base64 → disk)
       if (pendingPhotos.length > 0) {
-        await eel.copy_files(pendingPhotos, photosDir)();
+        await eel.save_files_from_base64(pendingPhotos, photosDir)();
       }
 
-      // Copy & rename inspection report
-      if (pendingPdf) {
-        await eel.copy_file(pendingPdf, reportPath)();
+      // Save & rename inspection report (base64 → "<dest>/inspection_report.pdf")
+      if (pendingPdf && pendingPdf.b64) {
+        await eel.save_file_from_base64(reportPath, pendingPdf.b64)();
       }
 
       // Done
@@ -379,11 +520,75 @@ async function renderHistoryFolder(kind, rootEl, folderNode) {
   const btnDelete = document.createElement('button');
   btnDelete.textContent =
     kind === 'inspection' ? 'Delete Inspection' : 'Delete Construction';
-  btnDelete.disabled = true; // unchanged per your original note
+
+  // Enable + wire up
+  btnDelete.disabled = false;
+  btnDelete.addEventListener('click', async () => {
+    const { rootPath } = resolveStationPath();
+    if (!rootPath) {
+      alert('Unable to resolve station folder path.');
+      return;
+    }
+
+    // What to delete:
+    const targetPath = `${rootPath}\\${folderNode.name}`;  // delete this entry only
+
+    const msg = `Delete this ${kind} entry folder?\n\n${targetPath}\n\n` +
+                `This removes its photos and report. The station folder remains.\n\nProceed?`;
+
+    if (!window.confirm(msg)) return;
+
+    try {
+      btnDelete.disabled = true;
+      btnDelete.textContent = 'Deleting…';
+
+      const res = await eel.delete_dir(targetPath)();
+      if (!res || !res.success) {
+        alert('Delete failed: ' + (res && res.message ? res.message : 'Unknown error'));
+        btnDelete.disabled = false;
+        btnDelete.textContent =
+          kind === 'inspection' ? 'Delete Inspection' : 'Delete Construction';
+        return;
+      }
+
+      // Refresh the current tab
+      await loadHistoryTab(kind);
+
+      // If you deleted the whole station, the construction list is gone too:
+      if (kind === 'inspection') {
+        // Optionally refresh construction tab UI if it might be open elsewhere
+        // await loadHistoryTab('construction');
+      }
+    } catch (e) {
+      console.error('Delete error', e);
+      alert('Delete failed. See console for details.');
+      btnDelete.disabled = false;
+      btnDelete.textContent =
+        kind === 'inspection' ? 'Delete Inspection' : 'Delete Construction';
+    }
+  });
+
 
   actions.append(btnReport, btnDelete);
   wrap.append(row, actions);
+  // Tag with data so we can sort later even for one-off appends
+  try {
+    const sortKey = _dateKeyFromName_hist(folderNode.name);
+    const mtime   = folderNode.mtime || 0;
+    wrap.dataset.sortKey = String(sortKey || 0);
+    wrap.dataset.mtime   = String(mtime || 0);
+    wrap.dataset.name    = folderNode.name || '';
+    if (HIST_DEBUG) dlog('renderHistoryFolder tag', { name: folderNode.name, sortKey, mtime });
+  } catch (e) {
+    console.warn('renderHistoryFolder: failed to set dataset keys', e);
+  }
+
   rootEl.appendChild(wrap);
+
+  // If someone calls renderHistoryFolder ad-hoc (e.g., after creating a folder),
+  // keep the list in the correct order.
+  queueMicrotask(() => ensureSortedHistoryList(rootEl));
+
 }
 
 /* ───────────────────────── Helpers ───────────────────────── */
@@ -408,18 +613,38 @@ function collectImages(node, out) {
 }
 
 function parseFolderTitle(name) {
-  // Examples:
-  //  "2015-cableway-inspection" -> { dateStr:"2015", title:"Cableway Inspection" }
-  //  "2019_ice work"            -> { dateStr:"2019", title:"Ice Work" }
-  //  "2024 New Gauge"           -> { dateStr:"2024", title:"New Gauge" }
-  const clean = String(name || '').replace(/[_\-]+/g, ' ').trim();
+  const s = (name ?? '').toString();                 // always a string
+  const clean = s.replace(/[_\-]+/g, ' ').trim();
+
+  // Try to pull a leading year, but the rest may be missing/odd
   const m = clean.match(/^(\d{4})\s+(.*)$/);
-  const rawTitle = m ? m[2] : clean;
+
   const dateStr = m ? m[1] : '';
-  const title = rawTitle
+  const rawTitle = (m && typeof m[2] === 'string') ? m[2] : clean;
+
+  const title = (rawTitle || '')
     .replace(/\s+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+
   return { dateStr, title };
+}
+
+
+function _dateKeyFromName_hist(name) {
+  const clean = String(name || '').replace(/[_\-]+/g, ' ').trim();
+  // Find a 4-digit year anywhere; optional month/day after it.
+  const m = clean.match(/\b((?:19|20)\d{2})(?:\s+(\d{1,2}))?(?:\s+(\d{1,2}))?/);
+  let key = 0;
+  if (m) {
+    const y  = +m[1];
+    const mo = Math.min(12, Math.max(1, +(m[2] || 12)));
+    const d  = Math.min(31, Math.max(1, +(m[3] || 31)));
+    key = y * 10000 + mo * 100 + d;
+  }
+  if (HIST_DEBUG) dlog(`dateKey("${name}") → clean="${clean}" match=${!!m} key=${key}`);
+  return key;
+
 }
 
 /**
@@ -485,15 +710,23 @@ function basename(p) {
 
 async function looksLikeInspectionFolder(folderNode) {
   // 1) name contains "inspection" etc.
-  if (IS_INSPECTION_NAME.test(folderNode.name.replace(/_/g, ' '))) return true;
-
+  if (IS_INSPECTION_NAME.test(folderNode.name.replace(/_/g, ' '))) {
+    if (HIST_DEBUG) dlog(`looksLikeInspectionFolder("${folderNode.name}") → by name`);
+    return true;
+  }
   // 2) contains a PDF with "inspection" in the filename
   const pdf = findInspectionPdf(folderNode);
-  if (pdf) return true;
+  if (pdf) {
+    if (HIST_DEBUG) dlog(`looksLikeInspectionFolder("${folderNode.name}") → by PDF: ${pdf}`);
+    return true;
+  }
 
   // 3) note.txt has an Inspector line -> we’ll treat as inspection
   const meta = await readFolderMeta(folderNode);
-  if (meta.inspector) return true;
+  if (meta.inspector) {
+    if (HIST_DEBUG) dlog(`looksLikeInspectionFolder("${folderNode.name}") → by Inspector in note.txt`);
+    return true;
+  }
 
   return false;
 }
@@ -527,12 +760,16 @@ async function readFolderMeta(folderNode) {
     if (Array.isArray(n.children)) n.children.forEach(find);
   })(folderNode);
 
-  if (!notePath) return { inspector: '', comment: '' };
+  if (!notePath) {
+    if (HIST_DEBUG) dlog(`readFolderMeta("${folderNode.name}") → no note.txt`);
+    return { inspector: '', comment: '' };
+  }
 
   try {
     const text = await eel.read_text_file(notePath)(); // small text, safe to send
     const inspector = (text.match(/^\s*Inspector:\s*(.*)$/im) || [,''])[1].trim();
     const comment = (text.match(/^\s*Comment:\s*([\s\S]*)$/im) || [,''])[1].trim();
+    if (HIST_DEBUG) dlog(`readFolderMeta("${folderNode.name}") → inspector="${inspector}"`);
     return { inspector, comment };
   } catch (e) {
     console.warn('read_text_file failed', e);

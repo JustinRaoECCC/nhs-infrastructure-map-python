@@ -249,8 +249,7 @@ class DBRepo(BaseRepo):
             return {
                 "companies": companies,
                 "locations": locations,
-                "asset_type"
-                "asset_types": asset_types,
+                "asset_types": asset_types
             }
         
     def update_station(self, station_obj: dict):
