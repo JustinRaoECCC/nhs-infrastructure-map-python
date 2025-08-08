@@ -86,5 +86,5 @@ window.electronAPI = {
   getWorkplanDetails:         ()            => eel.get_workplan_details()(),
   getWorkplanConstants:       ()            => eel.get_workplan_constants()(),
   optimizeWorkplan:           ()            => eel.optimize_workplan()(),
-
+  importRepairsExcel:       b64 => eel.import_repairs_excel(b64)(),
 };

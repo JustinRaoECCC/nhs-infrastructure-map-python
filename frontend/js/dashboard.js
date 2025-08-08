@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── Initialize Dashboard UI ───────────────────────────────────────────────
   async function initDashboardUI() {
+
+    window.__repairsImportCache = window.__repairsImportCache || [];
+
     // ─── Elements ─────────────────────────────────────────────────────────────
     const tabs               = document.querySelectorAll('.dashboard-tab');
     const contents           = document.querySelectorAll('.dashboard-content');
@@ -390,6 +393,11 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       );
 
+      // Rebuild Workplan headers (adds any new parameter columns)
+      await loadWorkplan();
+      // Backfill from cached import into any newly-added columns
+      await populateWorkplanFromImport();
+
 
       closeAddParamModal();
     });
@@ -418,6 +426,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // send all rows back to Python
       await eel.save_algorithm_parameters(toSave)();
+
+      await loadWorkplan();
+      await populateWorkplanFromImport();
+
       renderParamStats(toSave);
     });
 
@@ -468,6 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
           hdrRow.appendChild(th);
         });
       dashPlaceholder.querySelector('#workplanBody').innerHTML = '';
+      await populateWorkplanFromImport();
     }
 
     if (saveWPBtn) {
@@ -508,6 +521,55 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+      // ─── Import Repairs button (bottom of Workplan) ─────────────────────────
+    const importBar = document.createElement('div');
+    importBar.style = 'margin-top:12px; display:flex; gap:10px; align-items:center;';
+
+    const importBtn = document.createElement('button');
+    importBtn.id = 'btnImportRepairs';
+    importBtn.textContent = 'Import Repairs';
+
+    const importInfo = document.createElement('span');
+    importInfo.style = 'opacity:.75; font-size:12px;';
+    importInfo.textContent = window.__repairsImportCache.length
+      ? `Imported ${window.__repairsImportCache.length} rows`
+      : 'No file imported';
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    fileInput.style.display = 'none';
+
+    importBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async (e) => {
+      const f = (e.target.files || [])[0];
+      if (!f) return;
+      // Read file → base64 (same approach used elsewhere)
+      const buf   = await f.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      for (let b of bytes) bin += String.fromCharCode(b);
+      const b64 = btoa(bin);
+
+      const res = await window.electronAPI.importRepairsExcel(b64);
+      if (!res || !res.success) {
+        alert('Import failed: ' + (res && res.message ? res.message : 'Unknown error'));
+        return;
+      }
+
+      window.__repairsImportCache = res.rows || [];
+      importInfo.textContent = `Imported ${window.__repairsImportCache.length} rows`;
+
+      // Ensure headers exist, then populate table immediately
+      await loadWorkplan();               // builds headers based on current parameters
+      await populateWorkplanFromImport(); // fills rows under existing columns
+    });
+
+    importBar.append(importBtn, importInfo, fileInput);
+    // Place it at the end of the Workplan container
+    if (wpContainer) wpContainer.appendChild(importBar);
+
     // Whenever any dashboard tab other than “Optimization” is clicked, clear its results
     const tabss = document.querySelectorAll('.dashboard-tab');
     tabss.forEach(tab => {
@@ -520,6 +582,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+        async function populateWorkplanFromImport() {
+      const rows = window.__repairsImportCache || [];
+      if (!rows.length) return;
+
+      const hdrRow = dashPlaceholder.querySelector('#workplanHeaders');
+      const tbody  = dashPlaceholder.querySelector('#workplanBody');
+      if (!hdrRow || !tbody) return;
+
+      // Current columns (already built by loadWorkplan())
+      const headers = Array.from(hdrRow.querySelectorAll('th')).map(th => th.textContent.trim());
+
+      // Map of station number → site name from our station data
+      const stationList = await window.electronAPI.getStationData();
+      const siteByStation = new Map(
+        (stationList || []).map(s => [String(s.station_id), String(s.name || '')])
+      );
+
+      // Map column names to imported field keys
+      const colMap = {
+        'Site Name':     '__site_name__',
+        'Station Number':'station_number',
+        'Operation':     'repair_name',
+        'Severity Ranking': 'severity_ranking',
+        'Priority Ranking': 'priority_ranking',
+        'Repair Cost (K)':  'repair_cost_k',
+        'Days':             'days',
+      };
+
+      // Rebuild body from imported rows
+      tbody.innerHTML = '';
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        headers.forEach(h => {
+          const td = document.createElement('td');
+          const key = colMap[h];
+
+          let val = '';
+          if (key === '__site_name__') {
+            val = siteByStation.get(String(r.station_number)) || '';
+          } else if (key) {
+            val = r[key] != null ? r[key] : '';
+          } else {
+            // not one of our mapped columns → leave blank
+            val = '';
+          }
+          td.textContent = val;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
 
     recalcPercentageTotal();
   }

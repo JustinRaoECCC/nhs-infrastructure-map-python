@@ -547,6 +547,73 @@ def open_file_natively(path: str) -> dict:
         print("open_file_natively error:", e)
         return {"success": False, "message": str(e)}
 
+
+@eel.expose
+def import_repairs_excel(b64: str) -> dict:
+    """
+    Parse an .xlsx (first sheet) with header:
+    Station Number | Repair Name | Severity Ranking | Priority Ranking | Repair Cost (K) | Days
+    Returns normalized rows for the frontend to cache until app restart.
+    """
+    import base64, io
+    try:
+        raw = base64.b64decode(b64)
+        wb  = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws  = wb.active
+
+        # Read header row
+        hdr = [str(c or "").strip() for c in next(ws.iter_rows(min_row=1, max_row=1, values_only=True))]
+        name_to_idx = {h.lower(): i for i, h in enumerate(hdr)}
+
+        def idx(label_variants):
+            for v in label_variants:
+                i = name_to_idx.get(v.lower())
+                if i is not None:
+                    return i
+            return None
+
+        i_station = idx(["Station Number"])
+        i_name    = idx(["Repair Name"])
+        i_sev     = idx(["Severity Ranking", "Severity"])
+        i_pri     = idx(["Priority Ranking", "Priority"])
+        i_cost    = idx(["Repair Cost (K)", "Repair Cost K", "Repair Cost"])
+        i_days    = idx(["Days"])
+
+        if i_station is None or i_name is None:
+            return {"success": False, "message": "Header must include 'Station Number' and 'Repair Name'."}
+
+        rows = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row:
+                continue
+            stn = row[i_station] if i_station is not None else None
+            rnm = row[i_name]    if i_name    is not None else None
+            if stn is None and rnm is None:
+                continue
+
+            def get_num(i, cast):
+                if i is None:
+                    return None
+                v = row[i]
+                try:
+                    return cast(v) if v is not None and str(v).strip() != "" else None
+                except Exception:
+                    return None
+
+            rows.append({
+                "station_number": str(stn).strip() if stn is not None else "",
+                "repair_name":    str(rnm).strip() if rnm is not None else "",
+                "severity_ranking":  get_num(i_sev,  int),
+                "priority_ranking":  get_num(i_pri,  int),
+                "repair_cost_k":     get_num(i_cost, float),
+                "days":              get_num(i_days, int),
+            })
+
+        return {"success": True, "rows": rows}
+    except Exception as e:
+        print("import_repairs_excel error:", e)
+        return {"success": False, "message": str(e)}
+
 # ─── App startup ────────────────────────────────────────────────────────────
 def main():
     eel.init('frontend')
