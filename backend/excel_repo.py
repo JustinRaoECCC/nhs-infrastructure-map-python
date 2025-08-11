@@ -11,6 +11,9 @@ from .repairs_manager import save_repair as lm_save_repair
 from .persistence       import BaseRepo
 import os, glob, openpyxl
 from .lookups_manager import LOCATIONS_DIR
+import openpyxl
+from openpyxl import load_workbook
+import os, glob
 
 class ExcelRepo(BaseRepo):
     # ─── Lookups ─────────────────────────────────────────
@@ -131,7 +134,94 @@ class ExcelRepo(BaseRepo):
         so we don’t need a separate lookup here.
         """
         return []
-    
+
+    # ─── Merge-only field updater (no new columns; only fills empty cells) ────
+    def merge_fields_for_station(self, station_id: str, col_values: dict) -> dict:
+        """
+        For the given station_id, locate its row across data/locations/*.xlsx.
+        For each (header -> value) in col_values:
+          - if the header exists in that sheet,
+          - and the current cell is empty,
+          - and the incoming value is not empty,
+        then write it. Never creates new columns.
+        Returns {success, updated, checked}.
+        """
+        sid = str(station_id or '').strip()
+        if not sid:
+            return {"success": False, "message": "Missing station_id"}
+
+        # Scan all location workbooks to find the first matching sheet/row
+        dbg = {"stage": "locate_row", "searched": [], "match": None}
+        target = None
+        for loc_file in glob.glob(os.path.join(LOCATIONS_DIR, '*.xlsx')):
+            try:
+                wb = load_workbook(loc_file)
+            except Exception:
+                continue
+            for sheetname in wb.sheetnames:
+                ws = wb[sheetname]
+                # Headers are on row 2 in this project
+                headers = [c.value for c in ws[2]]
+                if not headers or 'Station ID' not in headers:
+                    continue
+                idx_sid = headers.index('Station ID') + 1
+                row_num = None
+                for r in range(3, ws.max_row + 1):
+                    val = ws.cell(row=r, column=idx_sid).value
+                    if val is not None and str(val).strip() == sid:
+                        row_num = r
+                        break
+                if row_num:
+                    target = (loc_file, sheetname, row_num, headers)
+                    dbg["match"] = {"path": loc_file, "sheet": sheetname, "row": row_num}
+                    break
+                else:   
+                    dbg["searched"].append({"path": loc_file, "sheet": sheetname, "rows": ws.max_row})
+            if target:
+                break
+
+        if not target:
+            dbg["reason"] = "station_not_found"
+            return {"success": False, "message": f"Station '{sid}' not found in location workbooks.", "debug": dbg}
+
+
+        path, sheet, row_num, headers = target
+        wb = load_workbook(path)
+        ws = wb[sheet]
+
+        updated = 0
+        checked = 0
+        dbg_updates = {"headers_count": len(headers), "keys_present": [], "keys_missing": [], "keys_updated": []}
+        # Only touch columns that already exist in headers
+        for key, val in (col_values or {}).items():
+            if key not in headers:
+                dbg_updates["keys_missing"].append(key)
+                continue  # do not add new columns
+            col_idx = headers.index(key) + 1
+            cell = ws.cell(row=row_num, column=col_idx)
+            checked += 1
+            current = cell.value
+            incoming = val if val is not None else ''
+            # only fill if current is empty and incoming non-empty
+            if (current is None or (isinstance(current, str) and current.strip() == '')):
+                if isinstance(incoming, str):
+                    if incoming.strip() == '':
+                        continue
+                    cell.value = incoming
+                else:
+                    cell.value = incoming
+                updated += 1
+                dbg_updates["keys_updated"].append(key)
+            else:
+                dbg_updates["keys_present"].append(key)
+
+        if updated:
+            wb.save(path)
+        dbg_final = {"path": path, "sheet": sheet, "row": row_num}
+        return {"success": True, "updated": updated, "checked": checked, "debug": {"repo": dbg, "updates": dbg_updates, "target": dbg_final}}
+
+
+
     def get_companies(self):
         from .lookups_manager import get_companies as lm_get_companies
         return lm_get_companies()

@@ -19,16 +19,161 @@ document.addEventListener('DOMContentLoaded', () => {
     rightPanel.style.display         = 'none';
     stationPlaceholder.style.display = 'none';
 
-    // Clear optimization results each time dashboard is shown
-    const optPane = dashPlaceholder.querySelector('#optimization .opt-container');
-    if (optPane) optPane.querySelectorAll('pre').forEach(p => p.remove());
-
+    // Ensure the dashboard markup exists *before* we touch #optimization
     if (!dashPlaceholder.innerHTML.trim()) {
       const html = await fetch('dashboard.html').then(r => r.text());
       dashPlaceholder.innerHTML = html;
       initDashboardUI();
     }
     dashPlaceholder.style.display = 'block';
+
+    // Now that markup exists, resolve the optimization pane
+    const optRoot = dashPlaceholder.querySelector('#optimization');
+    const optPane = optRoot && (optRoot.querySelector('.opt-container') || optRoot);
+
+    // Clear optimization results each time dashboard is shown
+    if (optPane) optPane.querySelectorAll('pre, ol, table.opt-table').forEach(p => p.remove());
+
+    // ➕ ensure the Optimize button is visible again when returning to this page
+    const optBtn = dashPlaceholder.querySelector('#optimizeBtn');
+    if (optBtn) optBtn.style.display = '';
+
+    // Start watching for optimization results being rendered
+    startOptimizationObserver();
+
+    // Optional lookup for Station Name -> fill this with your data.
+    // Example: { "08GA022": "LB Platform", "08BE004": "HS Ladder" }
+    const stationNameLookup = window.stationNameLookup || {};
+
+    /**
+     * Turn the existing <ol><li>…</li></ol> output (or a plain array of lines)
+     * into a table with columns:
+     * Rank | Station Name | Station ID | Operation | Summed Value
+     */
+    function renderOptimizationTable(inputLines) {
+      // use the same resolved pane (fallback to query if needed)
+      const pane =
+        (typeof optPane !== 'undefined' && optPane) ||
+        dashPlaceholder.querySelector('#optimization .opt-container') ||
+        dashPlaceholder.querySelector('#optimization');
+      if (!pane) return;
+
+      // If no lines were passed, try to read from an <ol> inside the pane.
+      let lines = inputLines;
+      const existingList = !lines && pane.querySelector('ol');
+      if (!lines && existingList) {
+        lines = [...existingList.querySelectorAll('li')].map(li => li.textContent.trim());
+      }
+      if (!Array.isArray(lines) || !lines.length) return;
+
+      // Parse lines -> rows
+      const rows = lines.map(parseOptimizationLine).filter(Boolean);
+
+      // Sort by numeric summed value (desc) and assign rank
+      rows.sort((a, b) => (b.summedValue ?? 0) - (a.summedValue ?? 0));
+      rows.forEach((r, i) => (r.rank = i + 1));
+
+      // Build table
+      const table = document.createElement('table');
+      table.className = 'opt-table';
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th class="rank">Rank</th>
+            <th>Station Name</th>
+            <th class="station-id">Station ID</th>
+            <th>Operation</th>
+            <th class="num">Summed Value</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+
+      const tbody = table.querySelector('tbody');
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="rank">${r.rank}</td>
+          <td>${r.stationName || ''}</td>
+          <td>${r.stationId || ''}</td>
+          <td>${r.operation || ''}</td>
+          <td class="num">${Number.isFinite(r.summedValue) ? r.summedValue.toFixed(2) + '%' : ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Always replace any prior markup (ol/pre/old table) with the new table
+      pane.querySelectorAll('ol, pre, table.opt-table').forEach(el => el.remove());
+      pane.appendChild(table);
+    }
+
+    /**
+     * Parse one line like:
+     * "1. 08GA022 | - Fix LB platform flooring mesh tipping hazard | 75%"
+     * → { stationId, stationName, operation, summedValue }
+     */
+    function parseOptimizationLine(line) {
+      if (!line) return null;
+      let s = line.trim();
+
+      // Strip a leading "1." marker if present
+      s = s.replace(/^\s*\d+\.\s*/, '');
+
+      // Pick off the ending percent as Summed Value
+      let summedValue = NaN;
+      const pctMatch = s.match(/([0-9]+(?:\.[0-9]+)?)\s*%\.?\s*$/);
+      if (pctMatch) {
+        summedValue = parseFloat(pctMatch[1]);
+        s = s.slice(0, pctMatch.index).trim(); // remove the trailing " | 75%"
+        s = s.replace(/\|\s*$/, '').trim();    // remove a trailing "|" if any
+      }
+
+      // Now expect "StationID | (optional '-') Operation"
+      const firstBar = s.indexOf('|');
+      let stationId = '', operation = s;
+      if (firstBar > -1) {
+        stationId = s.slice(0, firstBar).trim();
+        operation = s.slice(firstBar + 1).trim().replace(/^-+\s*/, '');
+      } else {
+        // Fallback: take the first token as stationId
+        const firstToken = s.split(/\s+/)[0];
+        if (/^[0-9A-Z]{4,}$/.test(firstToken)) {
+          stationId = firstToken;
+          operation = s.slice(firstToken.length).trim().replace(/^[|–-]\s*/, '');
+        }
+      }
+
+      const stationName = stationNameLookup[stationId] || '';
+      return { stationId, stationName, operation, summedValue };
+    }
+
+    /**
+     * Convert any <ol> or <pre> that shows up in the optimization pane
+     * into the formatted table automatically.
+     */
+    function startOptimizationObserver() {
+      if (!optPane) return; // optPane is set after HTML is injected
+
+      // Try once immediately in case content is already there
+      tryRenderFromPane();
+
+      const obs = new MutationObserver(() => tryRenderFromPane());
+      obs.observe(optPane, { childList: true, subtree: true });
+
+      function tryRenderFromPane() {
+        if (optPane.querySelector('table.opt-table')) return; // already converted
+
+        const list = optPane.querySelector('ol');
+        const pre  = optPane.querySelector('pre');
+        if (!list && !pre) return;
+
+        const lines = list
+          ? [...list.querySelectorAll('li')].map(li => li.textContent.trim())
+          : pre.textContent.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+
+        if (lines.length) renderOptimizationTable(lines);
+      }
+    }
   }
 
   // ─── Return to Map ─────────────────────────────────────────────────────────
@@ -468,17 +613,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const consts = await eel.get_workplan_constants()();
       constantsContainer.innerHTML = '';
       consts.forEach(c => constantsContainer.append(makeConstantRow(c.field, c.value||'')));
-      // existing dynamic table logic unchanged...
+      // Build a UNIQUE list of parameter names (one column per parameter)
       const params = await eel.get_algorithm_parameters()();
+      const uniqueParams = [...new Set(params.map(p => p.parameter))];
 
+      // Render headers: fixed 3 + unique parameter columns
       const hdrRow = dashPlaceholder.querySelector('#workplanHeaders');
       hdrRow.innerHTML = '';
-      ['Site Name','Station Number','Operation', ...params.map(p => p.parameter)]
-        .forEach(text => {
-          const th = document.createElement('th');
-          th.textContent = text;
-          hdrRow.appendChild(th);
-        });
+      const headers = ['Site Name','Station Number','Operation', ...uniqueParams];
+      headers.forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        hdrRow.appendChild(th);
+      });
+
       dashPlaceholder.querySelector('#workplanBody').innerHTML = '';
       await populateWorkplanFromImport();
     }
@@ -505,19 +653,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const optimizeBtn = document.getElementById('optimizeBtn');
     if (optimizeBtn) {
       optimizeBtn.addEventListener('click', async () => {
-        // call backend
-        const result = await window.electronAPI.optimizeWorkplan();
+        // 1) Harvest Workplan table (exactly what the user is seeing)
+        const hdrRow = document.querySelector('#workplanHeaders');
+        const body   = document.querySelector('#workplanBody');
+        const headers = Array.from(hdrRow.querySelectorAll('th')).map(th => th.textContent.trim());
+
+        const workplanRows = Array.from(body.querySelectorAll('tr')).map(tr => {
+          const cells = Array.from(tr.querySelectorAll('td'));
+          const rec = {};
+          headers.forEach((h, i) => {
+            rec[h] = (cells[i] ? cells[i].textContent : '') || '';
+          });
+          return rec;
+        });
+
+        // 2) Harvest per-parameter Overall weights (%) from the Parameter panel
+        const overall = {};
+        document.querySelectorAll('.param-row').forEach(row => {
+          const pname = row.querySelector('.param-name')?.value?.trim();
+          const pct   = parseFloat(row.querySelector('.param-percentage')?.value || '0');
+          if (pname) overall[pname] = isFinite(pct) ? pct : 0;
+        });
+
+        // 3) Call backend with both pieces
+        const payload = { workplan_rows: workplanRows, param_overall: overall };
+        const result = await window.electronAPI.optimizeWorkplan(payload);
         console.log('Optimize result:', result);
 
-        // display under the button
-        const optPane = document.querySelector('#optimization .opt-container');
-        // clear any old output
-        optPane.querySelectorAll('pre').forEach(p => p.remove());
+        // 4) Hide the button until the user leaves and re-enters this page
+        optimizeBtn.style.display = 'none';
 
-        const pre = document.createElement('pre');
-        pre.style.marginTop = '1em';
-        pre.textContent = JSON.stringify(result, null, 2);
-        optPane.appendChild(pre);
+        // 5) Display a clean ordered ranking under the button
+        const optPane = document.querySelector('#optimization .opt-container');
+        optPane.querySelectorAll('pre, ol').forEach(p => p.remove());
+
+        const ol = document.createElement('ol');
+        ol.style.marginTop = '1em';
+
+        (result?.ranking || []).forEach(item => {
+          const li = document.createElement('li');
+          // Example: "#1 — STN123  |  Replace cable  |  62.0%"
+          const left = [
+            item.station_number ? String(item.station_number) : '',
+            item.operation ? String(item.operation) : ''
+          ].filter(Boolean).join('  |  ');
+
+          li.textContent = `${left}  |  ${item.score}%`;
+          ol.appendChild(li);
+        });
+
+        if ((result?.ranking || []).length === 0) {
+          const li = document.createElement('li');
+          li.textContent = 'No items to rank.';
+          ol.appendChild(li);
+        }
+
+        optPane.appendChild(ol);
       });
     }
 
@@ -594,22 +785,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // Current columns (already built by loadWorkplan())
       const headers = Array.from(hdrRow.querySelectorAll('th')).map(th => th.textContent.trim());
 
+      // Parameters = everything after the first 3 fixed columns
+      const paramSet = new Set(headers.slice(3));
+
       // Map of station number → site name from our station data
       const stationList = await window.electronAPI.getStationData();
       const siteByStation = new Map(
         (stationList || []).map(s => [String(s.station_id), String(s.name || '')])
       );
-
-      // Map column names to imported field keys
-      const colMap = {
-        'Site Name':     '__site_name__',
-        'Station Number':'station_number',
-        'Operation':     'repair_name',
-        'Severity Ranking': 'severity_ranking',
-        'Priority Ranking': 'priority_ranking',
-        'Repair Cost (K)':  'repair_cost_k',
-        'Days':             'days',
-      };
 
       // Rebuild body from imported rows
       tbody.innerHTML = '';
@@ -617,18 +800,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const tr = document.createElement('tr');
         headers.forEach(h => {
           const td = document.createElement('td');
-          const key = colMap[h];
-
           let val = '';
-          if (key === '__site_name__') {
-            val = siteByStation.get(String(r.station_number)) || '';
-          } else if (key) {
-            val = r[key] != null ? r[key] : '';
-          } else {
-            // not one of our mapped columns → leave blank
-            val = '';
+
+          // Fixed columns
+          if (h === 'Site Name') {
+            // Prefer exact "Station Number" from the import to look up site name.
+            const stn = r['Station Number'] != null
+              ? String(r['Station Number'])
+              // tiny fallback if someone used "Station ID"
+              : (r['Station ID'] != null ? String(r['Station ID']) : '');
+            val = siteByStation.get(stn) || '';
+          } else if (h === 'Station Number') {
+            val = r['Station Number'] != null ? r['Station Number'] : (r['Station ID'] || '');
+          } else if (h === 'Operation') {
+            // Friendly fallback: many sheets use "Repair Name"
+            val = (r['Operation'] != null) ? r['Operation']
+                : (r['Repair Name'] != null ? r['Repair Name'] : '');
+
+          // Parameter columns: exact name match between Parameter and Import header
+          } else if (paramSet.has(h)) {
+            val = r.hasOwnProperty(h) && r[h] != null ? r[h] : '';
           }
-          td.textContent = val;
+
+          // IMPORTANT: do not coerce; show strings like "<2" or "2-4" as-is
+          td.textContent = val == null ? '' : String(val);
           tr.appendChild(td);
         });
         tbody.appendChild(tr);

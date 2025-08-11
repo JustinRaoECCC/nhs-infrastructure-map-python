@@ -85,6 +85,8 @@ window.electronAPI = {
   saveWorkplanConstants:      (entries)     => eel.save_workplan_constants(entries)(),
   getWorkplanDetails:         ()            => eel.get_workplan_details()(),
   getWorkplanConstants:       ()            => eel.get_workplan_constants()(),
-  optimizeWorkplan:           ()            => eel.optimize_workplan()(),
+  optimizeWorkplan:           (payload)     => eel.optimize_workplan(payload)(),
   importRepairsExcel:       b64 => eel.import_repairs_excel(b64)(),
+  // — Import-only field merge for a single station —
+  importFieldsForStation:   (stationId, b64) => eel.import_fields_for_station(stationId, b64)(),
 };

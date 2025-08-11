@@ -40,6 +40,10 @@ ensure_data_folder()
 ensure_lookups_file()
 dm = DataManager()
 
+# Register excel import endpoints now that dm exists, and inject dm safely
+from . import excel_import
+excel_import.set_dm(dm)
+
 # ─── Exposed Lookup APIs ───────────────────────────────────────────────────
 @eel.expose
 def get_locations():
@@ -244,44 +248,68 @@ def delete_station(station_id):
 
 @eel.expose
 def list_photos(root_dir: str, include_reports: bool = False):
-    # Include absolute path and folder mtime so the UI can sort by "newest first"
-    try:
-        mtime = os.path.getmtime(root_dir)
-    except Exception:
-        mtime = 0
-    tree = {
-        "name": os.path.basename(root_dir),
-        "type": "folder",
-        "path": root_dir,
-        "mtime_ts": mtime,
-        "children": []
-    }
-    try:
-        entries = sorted(os.listdir(root_dir))
-    except Exception:
-        return tree  # return empty if path missing or unreadable
+    """
+    Return a pruned directory tree:
+      - include only files with allowed extensions
+      - include only folders that (recursively) contain at least one allowed file
+    """
+    import os
 
-    allow_exts = {"png","jpg","jpeg","gif","bmp"}
+    # Allowed file types
+    allow_exts = {"png", "jpg", "jpeg", "gif", "bmp"}
     if include_reports:
-        allow_exts |= {"pdf","txt"}
+        allow_exts |= {"pdf", "txt"}
 
-    for entry in entries:
-        full = os.path.join(root_dir, entry)
-        if os.path.isdir(full):
-            tree["children"].append(list_photos(full, include_reports))
-        else:
-            ext = entry.rsplit(".", 1)[-1].lower()
-            if ext in allow_exts:
-                try:
-                    f_mtime = os.path.getmtime(full)
-                except Exception:
-                    f_mtime = 0
-                tree["children"].append({
-                    "name": entry,
-                    "type": "file",
-                    "path": full,
-                    "mtime_ts": f_mtime
-                })
+    def _mtime(path):
+        try:
+            return os.path.getmtime(path)
+        except Exception:
+            return 0
+
+    def _walk(dir_path):
+        """
+        Returns (node_dict, has_allowed) where has_allowed means this directory
+        or any of its descendants contains an allowed file.
+        """
+        node = {
+            "name": os.path.basename(dir_path),
+            "type": "folder",
+            "path": dir_path,
+            "mtime_ts": _mtime(dir_path),
+            "children": []
+        }
+
+        # If unreadable, treat as empty
+        try:
+            entries = sorted(os.listdir(dir_path))
+        except Exception:
+            return node, False
+
+        has_allowed = False
+
+        for entry in entries:
+            full = os.path.join(dir_path, entry)
+            if os.path.isdir(full):
+                child_node, child_has = _walk(full)
+                # Keep the folder only if it (recursively) has an allowed file
+                if child_has:
+                    node["children"].append(child_node)
+                    has_allowed = True or has_allowed
+            else:
+                # File: include only if extension is allowed
+                ext = entry.rsplit(".", 1)[-1].lower() if "." in entry else ""
+                if ext in allow_exts:
+                    node["children"].append({
+                        "name": entry,
+                        "type": "file",
+                        "path": full,
+                        "mtime_ts": _mtime(full)
+                    })
+                    has_allowed = True
+
+        return node, has_allowed
+
+    tree, _ = _walk(root_dir)
     return tree
 
 @eel.expose
@@ -385,21 +413,24 @@ def set_asset_type_color_for_location(asset_type, location, color):
     return {"success": False, "message": f"No row for {asset_type}@{location}"}
 
 @eel.expose
-def optimize_workplan():
+def optimize_workplan(payload=None):
     """
     Called by the front-end when the user clicks “Optimize Workplan”.
-    Gathers current stations, algorithm parameters, and constants, then runs the algorithm.
+    `payload` may include:
+      - workplan_rows: list[dict] → rows shown in the Workplan table right now
+      - param_overall: { parameter_name: overall_percent } (e.g., 25 for 25%)
     """
-    # 1) Fetch all data
     stations = dm.list_stations()
     params   = read_algorithm_parameters()
     consts   = read_workplan_constants()
 
-    # 2) Delegate to algorithm.py
-    result = _optimize_workplan(stations, params, consts)
+    workplan_rows = None
+    param_overall = None
+    if isinstance(payload, dict):
+        workplan_rows = payload.get("workplan_rows") or payload.get("rows")
+        param_overall = payload.get("param_overall") or payload.get("overall_weights")
 
-    # 3) Return back to JS
-    return result
+    return _optimize_workplan(stations, params, consts, workplan_rows, param_overall)
 
 @eel.expose
 def get_repairs(station_id: str):
@@ -551,9 +582,8 @@ def open_file_natively(path: str) -> dict:
 @eel.expose
 def import_repairs_excel(b64: str) -> dict:
     """
-    Parse an .xlsx (first sheet) with header:
-    Station Number | Repair Name | Severity Ranking | Priority Ranking | Repair Cost (K) | Days
-    Returns normalized rows for the frontend to cache until app restart.
+    Parse an .xlsx (first sheet). Return rows as dicts keyed by the EXACT header
+    names found in row 1. No type coercion is applied — values are returned as-is.
     """
     import base64, io
     try:
@@ -561,53 +591,62 @@ def import_repairs_excel(b64: str) -> dict:
         wb  = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
         ws  = wb.active
 
-        # Read header row
-        hdr = [str(c or "").strip() for c in next(ws.iter_rows(min_row=1, max_row=1, values_only=True))]
-        name_to_idx = {h.lower(): i for i, h in enumerate(hdr)}
+        # Read header row exactly as written in Excel (trim cell text, keep case)
+        header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None)
+        if not header_row:
+            return {"success": False, "message": "Missing header row."}
+        headers = [ (str(c).strip() if c is not None else "") for c in header_row ]
+        # Remove trailing empty header cells
+        while headers and headers[-1] == "":
+            headers.pop()
+        if not headers:
+            return {"success": False, "message": "Empty header row."}
 
-        def idx(label_variants):
-            for v in label_variants:
-                i = name_to_idx.get(v.lower())
-                if i is not None:
-                    return i
-            return None
+        def _to_text(v):
+            if v is None:
+                return None
+            s = str(v).strip()
+            return s if s != "" else None
 
-        i_station = idx(["Station Number"])
-        i_name    = idx(["Repair Name"])
-        i_sev     = idx(["Severity Ranking", "Severity"])
-        i_pri     = idx(["Priority Ranking", "Priority"])
-        i_cost    = idx(["Repair Cost (K)", "Repair Cost K", "Repair Cost"])
-        i_days    = idx(["Days"])
-
-        if i_station is None or i_name is None:
-            return {"success": False, "message": "Header must include 'Station Number' and 'Repair Name'."}
+        def get_any(i, cast=None):
+            """
+            Return a value that can be a number or a string.
+            If `cast` is provided we attempt it; on failure we keep the original text.
+            """
+            if i is None:
+                return None
+            v = row[i]
+            if v is None:
+                return None
+            # Prefer text if it's non-empty
+            s = str(v).strip()
+            if s == "":
+                return None
+            if cast is None:
+                return s
+            try:
+                # tolerate thousand-separators for floats
+                return cast(s.replace(",", "")) if cast is float else cast(s)
+            except Exception:
+                return s
 
         rows = []
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row:
                 continue
-            stn = row[i_station] if i_station is not None else None
-            rnm = row[i_name]    if i_name    is not None else None
-            if stn is None and rnm is None:
-                continue
+            # Turn the current Excel row into { header: cell_value } exactly.
+            record = {}
+            # zip stops at the shortest; pad to len(headers)
+            cells = list(row) + [None] * max(0, len(headers) - len(row))
+            for h, v in zip(headers, cells):
+                if not h:
+                    continue   # ignore blank header cells
+                # Keep the value as-is (number stays number, text stays text like "<2")
+                record[h] = v
+            # Skip rows that are completely empty under the defined headers
+            if any(record.get(h) not in (None, "") for h in headers if h):
+                rows.append(record)
 
-            def get_num(i, cast):
-                if i is None:
-                    return None
-                v = row[i]
-                try:
-                    return cast(v) if v is not None and str(v).strip() != "" else None
-                except Exception:
-                    return None
-
-            rows.append({
-                "station_number": str(stn).strip() if stn is not None else "",
-                "repair_name":    str(rnm).strip() if rnm is not None else "",
-                "severity_ranking":  get_num(i_sev,  int),
-                "priority_ranking":  get_num(i_pri,  int),
-                "repair_cost_k":     get_num(i_cost, float),
-                "days":              get_num(i_days, int),
-            })
 
         return {"success": True, "rows": rows}
     except Exception as e:

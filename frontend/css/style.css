@@ -1041,3 +1041,48 @@ table.resolve-mode tbody tr:hover {
 table.resolve-mode tbody tr.selected {
   background-color: #fbb;
 }
+
+/* ---------- Optimization table ---------- */
+#optimization .opt-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+  background: #fff;
+}
+
+#optimization .opt-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+#optimization .opt-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  vertical-align: top;
+  word-break: break-word;
+}
+
+#optimization .opt-table tbody tr:nth-child(even) {
+  background: rgba(0,0,0,.015);
+}
+
+#optimization .opt-table td.num,
+#optimization .opt-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 110px;
+}
+
+#optimization .opt-table th.rank { width: 70px; }
+#optimization .opt-table th.station-id { width: 130px; }
+
+/* when refreshing, we also clear any prior table */
+#optimization .opt-container .opt-table { margin-top: 6px; }
