@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Now that markup exists, resolve the optimization pane
     const optRoot = dashPlaceholder.querySelector('#optimization');
     const optPane = optRoot && (optRoot.querySelector('.opt-container') || optRoot);
+    const opt2Pane = dashPlaceholder.querySelector('#optimization2 .opt2-container') || dashPlaceholder.querySelector('#optimization2');
 
     // Clear optimization results each time dashboard is shown
     if (optPane) optPane.querySelectorAll('pre, ol, table.opt-table').forEach(p => p.remove());
@@ -40,6 +41,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start watching for optimization results being rendered
     startOptimizationObserver();
+
+    // ── Optimization II: Geographical Order Workplan (smiley stub) ──────────
+    const geoBtn = dashPlaceholder.querySelector('#optimizeGeoBtn');
+    if (geoBtn) {
+      geoBtn.addEventListener('click', async () => {
+       // Try calling backend stub (safe if not imported yet)
+        try {
+          if (typeof eel?.run_geographical_algorithm === 'function') {
+            await eel.run_geographical_algorithm()();
+          }
+        } catch (e) { /* no-op for now */ }
+        if (opt2Pane) opt2Pane.innerHTML = '<div style="font-size:72px; line-height:1; margin:24px 0;">😄</div>';
+      });
+    }
+
 
     // Optional lookup for Station Name -> fill this with your data.
     // Example: { "08GA022": "LB Platform", "08BE004": "HS Ladder" }

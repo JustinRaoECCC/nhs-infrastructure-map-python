@@ -73,8 +73,10 @@ async function initPhotos() {
   const folderName = `${sitePart}_${idPart}`;
   console.log("[photos] looking in folder:", folderName);
   
-  // const root = `\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\${folderName}`;
-  const root = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\${folderName}`;
+  // BASE STATION FOLDER
+  const root = `\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\${folderName}`;
+  
+  // const root = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\${folderName}`;
 
   console.log("[photos] root path:", root);
 

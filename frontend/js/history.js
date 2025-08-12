@@ -16,8 +16,11 @@ function dlog(...args) {
   if (HIST_DEBUG) console.log('[history:debug]', ...args);
 }
 
-// const SERVER_STATIONS_ROOT = '\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\';
-const SERVER_STATIONS_ROOT = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\`;
+// BASE STATION FOLDER
+const SERVER_STATIONS_ROOT = '\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\';
+
+
+// const SERVER_STATIONS_ROOT = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\`;
 
 // Name-based classification fallback
 const IS_INSPECTION_NAME = /(inspection|assessment|site\s*visit|sitevisit|visit)/i;

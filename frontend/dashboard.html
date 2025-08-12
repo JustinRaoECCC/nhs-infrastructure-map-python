@@ -1,8 +1,9 @@
 <div id="dashboardContainer">
   <div class="dashboard-tabs">
-    <button class="dashboard-tab active" data-target="parameters">Parameters</button>
+    <button class="dashboard-tab" data-target="parameters">Parameters</button>
     <button class="dashboard-tab" data-target="workplan">Workplan</button>
-    <button class="dashboard-tab" data-target="optimization">Optimization</button>
+    <button class="dashboard-tab" data-target="optimization">Optimization I</button>
+    <button class="dashboard-tab" data-target="optimization2">Optimization II</button>
   </div>
 
   <!-- 1) Interactive Parameters editor -->
@@ -58,6 +59,17 @@
       <button id="optimizeBtn">Optimize Workplan</button>
     </div>
   </div>
+
+  <div id="optimization2" class="dashboard-content">
+    <div class="opt2-hero"
+         style="display:flex; align-items:center; justify-content:center; min-height:240px;">
+      <button id="optimizeGeoBtn" style="padding:12px 18px; font-weight:600;">
+        Geographically Order Workplan
+      </button>
+    </div>
+    <div class="opt2-container" style="margin-top:12px; text-align:center;"></div>
+  </div>
+
 
   <!-- Add Parameter Modal -->
   <div id="addParamModal" class="modal" style="display:none;">

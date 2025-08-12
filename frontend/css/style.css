@@ -723,6 +723,21 @@ body, html {
   cursor: pointer;
 }
 
+/* ─── Optimization II Tab: center Geographical button ───────────────────── */
+#optimization2.dashboard-content.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#optimization2 .opt2-container {
+  text-align: center;
+}
+#optimizeGeoBtn {
+  padding: 0.75em 1.5em;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
 /* ─── Workplan Panel: midpoint split & scrollable halves ───────────────── */
 #workplan.dashboard-content.active {
   display: flex;
