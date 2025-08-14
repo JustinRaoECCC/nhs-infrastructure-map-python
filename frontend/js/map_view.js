@@ -241,3 +241,9 @@ function createColoredIcon(color) {
     iconAnchor: [6, 6]
   });
 }
+
+// ─── Map click = reset RHS station details ────────────────────────────────
+map.on('click', () => {
+  const container = document.getElementById('station-details');
+  container.innerHTML = `<p><em>Click a pin to see details</em></p>`;
+});

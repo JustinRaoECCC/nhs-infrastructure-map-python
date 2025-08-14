@@ -104,9 +104,12 @@ function createCollapsibleItem(title, type, parentCompany = null) {
 
   header.appendChild(chk);
 
-  const toggleBtn = document.createElement('button');
-  toggleBtn.classList.add('toggle-collapse-button');
-  toggleBtn.textContent = '+';
+  let toggleBtn = null;
+  if (type !== 'asset-type') {
+    toggleBtn = document.createElement('button');
+    toggleBtn.classList.add('toggle-collapse-button');
+    toggleBtn.textContent = '+';
+  }
 
   const titleSpan = document.createElement('span');
   titleSpan.classList.add('collapsible-title');
@@ -118,13 +121,14 @@ function createCollapsibleItem(title, type, parentCompany = null) {
 
   // Left‑of‑title: toggle collapse; right‑of‑title: open modal
   // 1) Make the “+” button itself toggle (and stop propagation)
-  toggleBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    // check computed style so we catch the CSS‑hidden default
-    const isHidden = getComputedStyle(content).display === 'none';
-    content.style.display    = isHidden ? 'block' : 'none';
-    toggleBtn.textContent    = isHidden ? '–' : '+';
-  });
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const isHidden = getComputedStyle(content).display === 'none';
+      content.style.display    = isHidden ? 'block' : 'none';
+      toggleBtn.textContent    = isHidden ? '–' : '+';
+    });
+  }
 
   // 2) On header click, decide based on X coordinate
   header.addEventListener('click', e => {
@@ -150,10 +154,12 @@ function createCollapsibleItem(title, type, parentCompany = null) {
       window.openLocationModal(title);
     } else if (type === 'location' && typeof window.openAssetTypeModal === 'function') {
       window.openAssetTypeModal(parentCompany, title);
+    } else if (type === 'asset-type' && typeof window.prefillAndOpenAddInfraModal === 'function') {
+      window.prefillAndOpenAddInfraModal(parentCompany, title);  // parentCompany here is location
     }
   });
 
-  header.appendChild(toggleBtn);
+  if (toggleBtn) header.appendChild(toggleBtn);
   header.appendChild(titleSpan);
 
   // ─── cascade check/uncheck down to all grandchildren ────────────────
@@ -243,4 +249,14 @@ async function openAssetTypeColorMenu(assetType, location, anchorBtn) {
   const rect = anchorBtn.getBoundingClientRect();
   menu.style.top  = `${rect.bottom + window.scrollY}px`;
   menu.style.left = `${rect.left  + window.scrollX}px`;
+
+  // 3) Listen for outside clicks
+  const outsideClickListener = (e) => {
+    if (!menu.contains(e.target) && !anchorBtn.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', outsideClickListener, true);
+    }
+  };
+  document.addEventListener('click', outsideClickListener, true);
+
 }

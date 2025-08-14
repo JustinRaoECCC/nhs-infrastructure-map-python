@@ -7,11 +7,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnDashboard       = document.getElementById('btn-dashboard-view');
   const btnMapView         = document.getElementById('btn-map-view');
+  const btnListView        = document.getElementById('btn-list-view');
+  const btnInventorView    = document.getElementById('btn-inventor-view');
   const mapContainer       = document.getElementById('mapContainer');
   const rightPanel         = document.getElementById('rightPanel');
   const dashPlaceholder    = document.getElementById('dashboardContentContainer');
   const stationPlaceholder = document.getElementById('stationContentContainer');
   
+  // Reset both Optimization panes back to “just the buttons”
+  function resetOptimizationViews() {
+    if (!dashPlaceholder || !dashPlaceholder.innerHTML.trim()) return;
+
+    const optPane  = dashPlaceholder.querySelector('#optimization .opt-container') ||
+                     dashPlaceholder.querySelector('#optimization');
+    const opt2Pane = dashPlaceholder.querySelector('#optimization2 .opt2-container') ||
+                     dashPlaceholder.querySelector('#optimization2');
+
+    const optBtn   = dashPlaceholder.querySelector('#optimizeBtn');
+    const geoBtn   = dashPlaceholder.querySelector('#optimizeGeoBtn');
+    const hero     = dashPlaceholder.querySelector('#optimization2 .opt2-hero');
+
+    // show buttons again
+    if (optBtn) optBtn.style.display = '';
+    if (geoBtn) geoBtn.style.display = '';
+    if (hero)   hero.style.display   = '';
+    // clear any rendered results
+    if (optPane)  optPane.querySelectorAll('pre, ol, table.opt-table').forEach(el => el.remove());
+    if (opt2Pane) opt2Pane.innerHTML = '';
+  }
 
   // ─── Show Dashboard ────────────────────────────────────────────────────────
   async function showDashboard() {
@@ -28,32 +51,203 @@ document.addEventListener('DOMContentLoaded', () => {
     dashPlaceholder.style.display = 'block';
 
     // Now that markup exists, resolve the optimization pane
-    const optRoot = dashPlaceholder.querySelector('#optimization');
-    const optPane = optRoot && (optRoot.querySelector('.opt-container') || optRoot);
-    const opt2Pane = dashPlaceholder.querySelector('#optimization2 .opt2-container') || dashPlaceholder.querySelector('#optimization2');
+    const optRoot  = dashPlaceholder.querySelector('#optimization');
+    const optPane  = optRoot && (optRoot.querySelector('.opt-container') || optRoot);
+    const opt2Pane = dashPlaceholder.querySelector('#optimization2 .opt2-container') ||
+                     dashPlaceholder.querySelector('#optimization2');
 
-    // Clear optimization results each time dashboard is shown
-    if (optPane) optPane.querySelectorAll('pre, ol, table.opt-table').forEach(p => p.remove());
+    // Always start fresh when entering the dashboard
+    resetOptimizationViews();
 
-    // ➕ ensure the Optimize button is visible again when returning to this page
-    const optBtn = dashPlaceholder.querySelector('#optimizeBtn');
-    if (optBtn) optBtn.style.display = '';
-
-    // Start watching for optimization results being rendered
     startOptimizationObserver();
 
-    // ── Optimization II: Geographical Order Workplan (smiley stub) ──────────
+    // ── Optimization II: Geographical Order Workplan ─────────────────────────
     const geoBtn = dashPlaceholder.querySelector('#optimizeGeoBtn');
-    if (geoBtn) {
+    if (geoBtn && !geoBtn._wired) {
       geoBtn.addEventListener('click', async () => {
-       // Try calling backend stub (safe if not imported yet)
+        // Hide the Geographical button after it runs once (and collapse its hero spacer)
+        geoBtn.style.display = 'none';
+        const hero = dashPlaceholder.querySelector('#optimization2 .opt2-hero');
+        if (hero) hero.style.display = 'none';
+        const optRoot = dashPlaceholder.querySelector('#optimization');
+        const optPane = optRoot && (optRoot.querySelector('.opt-container') || optRoot);
+        const opt2Pane = dashPlaceholder.querySelector('#optimization2 .opt2-container') || dashPlaceholder.querySelector('#optimization2');
+
+        // Require Optimization I table
+        const table = optPane && optPane.querySelector('table.opt-table');
+        if (!table) {
+          opt2Pane.innerHTML = `<div class="opt2-note">Run Optimization I first, then click Optimization II.</div>`;
+          return;
+        }
+
+        // Pull rows from the Optimization I table
+        const headers = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
+        const idxStation = headers.findIndex(h => /Station ID/i.test(h));
+        const idxOp      = headers.findIndex(h => /Operation/i.test(h));
+        const idxScore   = headers.findIndex(h => /Summed Value/i.test(h));
+
+        // Build a lookup from the Workplan table for per-task Days
+        const wpHdrs = [...(document.querySelectorAll('#workplanHeaders th') || [])].map(th => th.textContent.trim());
+        const wpIdxStation = wpHdrs.findIndex(h => /Station Number/i.test(h));
+        const wpIdxOp      = wpHdrs.findIndex(h => /Operation/i.test(h));
+        const wpIdxDays    = wpHdrs.findIndex(h => /^Days$/i.test(h));
+        const wpRows = [...(document.querySelectorAll('#workplanBody tr') || [])];
+        const wpDaysByKey = new Map();
+        if (wpIdxStation >= 0 && wpIdxOp >= 0 && wpIdxDays >= 0) {
+          wpRows.forEach(tr => {
+            const tds = [...tr.querySelectorAll('td')];
+            const sid = (tds[wpIdxStation]?.textContent || '').trim();
+            const op  = (tds[wpIdxOp]?.textContent || '').trim();
+            const daysRaw = (tds[wpIdxDays]?.textContent || '').trim();
+            const key = sid + '||' + op;
+            const val = Number.parseFloat(daysRaw);
+            if (sid && op && Number.isFinite(val)) wpDaysByKey.set(key, Math.max(1, Math.ceil(val)));
+          });
+        }
+
+        const items = [...table.querySelectorAll('tbody tr')].map(tr => {
+          const tds = [...tr.querySelectorAll('td')];
+          const sid = (tds[idxStation]?.textContent || '').trim();
+          const op  = (tds[idxOp]?.textContent || '').trim();
+          const sc  = parseFloat((tds[idxScore]?.textContent || '').replace('%','')) || 0;
+          const key = sid + '||' + op;
+          const out = { station_id: sid, operation: op, score: sc };
+          if (wpDaysByKey.has(key)) out.days = wpDaysByKey.get(key); // carry per-task Days to backend
+          return out;
+        }).filter(x => x.station_id);
+
+        // Build Station ID → Name map (for nicer tables)
+        const stationList = await window.electronAPI.getStationData();
+        const nameById = new Map((stationList || []).map(s => [String(s.station_id), String(s.name || '')]));
+
+        opt2Pane.innerHTML = `<div class="opt2-note">Planning…</div>`;
+
+        let res;
         try {
-          if (typeof eel?.run_geographical_algorithm === 'function') {
-            await eel.run_geographical_algorithm()();
-          }
-        } catch (e) { /* no-op for now */ }
-        if (opt2Pane) opt2Pane.innerHTML = '<div style="font-size:72px; line-height:1; margin:24px 0;">😄</div>';
+          res = await eel.run_geographical_algorithm({ items })();
+        } catch (e) {
+          console.error(e);
+          opt2Pane.innerHTML = `<div class="opt2-error">Optimization II failed.</div>`;
+          return;
+        }
+        if (!res || !res.success) {
+          opt2Pane.innerHTML = `<div class="opt2-error">${(res && res.message) || 'Optimization II failed.'}</div>`;
+          return;
+        }
+
+        // Render the plan
+        renderGeoPlan(opt2Pane, res, nameById);
       });
+      geoBtn._wired = true;
+    }
+
+    /** Renders the returned geographical plan into a well-formatted table(s). */
+    function renderGeoPlan(root, data, nameById) {
+      root.innerHTML = '';
+
+      // Summary header
+      const hdr = document.createElement('div');
+      hdr.className = 'opt2-header';
+      hdr.innerHTML = `
+        <div class="opt2-title">${data.plan_name || 'Geographical Plan'}</div>
+        <div class="opt2-summary">
+          <span class="chip">Trips: ${data.totals.trip_count}</span>
+          <span class="chip">Planned items: ${data.totals.planned}</span>
+          <span class="chip">Unplanned: ${data.totals.unplanned}</span>
+        </div>`;
+      root.appendChild(hdr);
+
+      // Each trip as its own section
+      (data.trips || []).forEach(trip => {
+        const sec = document.createElement('section');
+        sec.className = 'opt2-trip';
+
+        const sub = document.createElement('div');
+        sub.className = 'opt2-trip-head';
+        sub.innerHTML = `
+          <div class="trip-title">${trip.trip_name}</div>
+          <div class="trip-meta">
+            <span class="pill">Days: ${trip.days}</span>
+            <span class="pill">Items: ${trip.count}</span>
+            <span class="pill">Drive: ${trip.drive_count}</span>
+            <span className="pill">Heli: ${trip.helicopter_count}</span>
+          </div>`;
+        sec.appendChild(sub);
+
+        // Table
+        const table = document.createElement('table');
+        table.className = 'opt2-table';
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Day</th>
+              <th>Station Name</th>
+              <th class="station-id">Station ID</th>
+              <th>Operation</th>
+              <th class="num">Score</th>
+              <th>Mode</th>
+            </tr>
+          </thead>
+          <tbody></tbody>`;
+        const tbody = table.querySelector('tbody');
+
+        // Keep original relative order; annotate “rank” within trip
+        const rows = trip.schedule.slice().map((r, i) => ({ ...r, rank: i + 1 }));
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="rank">${r.rank}</td>
+            <td>${r.day}</td>
+            <td>${nameById.get(String(r.station_id)) || ''}</td>
+            <td class="station-id">${r.station_id}</td>
+            <td>${r.operation || ''}</td>
+            <td class="num">${Number.isFinite(r.score) ? r.score.toFixed(2) + '%' : ''}</td>
+            <td>${r.mode === 'helicopter' ? '🚁 helicopter' : '🚗 drive'}</td>`;
+          tbody.appendChild(tr);
+        });
+
+        sec.appendChild(table);
+        root.appendChild(sec);
+      });
+
+      // Unplanned section
+      if ((data.unplanned || []).length) {
+        const sec = document.createElement('section');
+        sec.className = 'opt2-trip';
+        const title = document.createElement('div');
+        title.className = 'trip-title';
+        title.textContent = 'Unplanned / Not In Trip Plan';
+        sec.appendChild(title);
+
+        const table = document.createElement('table');
+        table.className = 'opt2-table';
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Station Name</th>
+              <th class="station-id">Station ID</th>
+              <th>Operation</th>
+              <th class="num">Score</th>
+            </tr>
+          </thead>
+          <tbody></tbody>`;
+        const tbody = table.querySelector('tbody');
+
+        data.unplanned.forEach((r, i) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="rank">${i + 1}</td>
+            <td>${nameById.get(String(r.station_id)) || ''}</td>
+            <td class="station-id">${r.station_id}</td>
+            <td>${r.operation || ''}</td>
+            <td class="num">${Number.isFinite(r.score) ? r.score.toFixed(2) + '%' : ''}</td>`;
+          tbody.appendChild(tr);
+        });
+        sec.appendChild(table);
+        root.appendChild(sec);
+      }
     }
 
 
@@ -195,11 +389,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // ─── Return to Map ─────────────────────────────────────────────────────────
   btnMapView.addEventListener('click', e => {
     e.preventDefault();
+    resetOptimizationViews();
     dashPlaceholder.style.display    = 'none';
     stationPlaceholder.style.display = 'none';
     mapContainer.style.display       = '';
     rightPanel.style.display         = '';
   });
+  if (btnListView)     btnListView.addEventListener('click',   () => resetOptimizationViews());
+  if (btnInventorView) btnInventorView.addEventListener('click', () => resetOptimizationViews());
   btnDashboard.addEventListener('click', e => {
     e.preventDefault();
     showDashboard();
@@ -267,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // fill & disable condition dropdown
       const condSel = row.querySelector('.param-condition');
-      ['n/a','IF','WHILE'].forEach(optVal => {
+      ['IF'].forEach(optVal => {
         const opt = document.createElement('option');
         opt.value = opt.textContent = optVal;
         if (optVal === condition) opt.selected = true;
@@ -425,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ─── Open the Add-Parameter modal ─────────────────────────────────────────
     addBtn.addEventListener('click', () => {
       paramNameInput.value    = '';
-      paramConditionSel.value = 'n/a';
+      paramConditionSel.value = 'IF';
       paramMaxWeightInp.value = '3';
       optionsList.innerHTML   = '';
       optionsList.appendChild(makeOptionRow());
@@ -864,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const link = e.target.closest('.popup-link');
     if (!link) return;
     e.preventDefault();
+    resetOptimizationViews();
     const stationId = link.dataset.id;
     mapContainer.style.display       = 'none';
     rightPanel.style.display         = 'none';

@@ -723,21 +723,6 @@ body, html {
   cursor: pointer;
 }
 
-/* ─── Optimization II Tab: center Geographical button ───────────────────── */
-#optimization2.dashboard-content.active {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#optimization2 .opt2-container {
-  text-align: center;
-}
-#optimizeGeoBtn {
-  padding: 0.75em 1.5em;
-  font-size: 1.1rem;
-  cursor: pointer;
-}
-
 /* ─── Workplan Panel: midpoint split & scrollable halves ───────────────── */
 #workplan.dashboard-content.active {
   display: flex;
@@ -1101,3 +1086,60 @@ table.resolve-mode tbody tr.selected {
 
 /* when refreshing, we also clear any prior table */
 #optimization .opt-container .opt-table { margin-top: 6px; }
+
+/* Optimization II hero: fill available height and center the button */
+#optimization2 .opt2-hero{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex: 1 0 auto;      /* take all space until results appear */
+  min-height:160px;    /* reasonable floor */
+  padding:0;
+  border:0;            /* no mid-page line */
+}
+#optimization2 .opt2-hero[style*="display: none"]{
+  flex:0 0 auto;
+  padding:0;
+  border:0;
+}
+
+/* Optimization II styling */
+.opt2-header { display:flex; align-items:center; justify-content:space-between; margin: 8px 0 12px; }
+.opt2-title { font-size: 18px; font-weight: 700; }
+.opt2-summary .chip { display:inline-block; padding:4px 8px; margin-left:6px; border-radius:12px; background:#f2f4f7; font-size:12px; }
+.opt2-trip { margin: 14px 0 18px; }
+.opt2-trip-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.opt2-trip .trip-title { font-size: 15px; font-weight: 600; }
+.opt2-trip .trip-meta .pill { display:inline-block; font-size:12px; padding:3px 8px; border:1px solid #e6e8eb; border-radius:999px; margin-left:6px; }
+.opt2-table { width:100%; border-collapse:collapse; margin-top:6px; }
+.opt2-table thead th { text-align:left; font-weight:600; border-bottom:1px solid #e5e7eb; padding:6px 8px; }
+.opt2-table tbody td { padding:6px 8px; border-bottom:1px dashed #f0f2f5; }
+.opt2-table .num, .opt2-table .rank, .opt2-table .station-id { text-align:right; white-space:nowrap; }
+.opt2-note { padding:8px; font-size:13px; opacity:.85; }
+.opt2-error { padding:8px; color:#b00020; font-weight:600; }
+
+/* ─── Optimization II: container layout ───────────────────── */
+#optimization2.dashboard-content.active{
+  display:flex;
+  flex-direction:column;
+  flex:1 1 auto;
+  min-height:0;                 /* allow child to shrink & scroll */
+  align-items:stretch;          /* don't center the whole pane */
+  justify-content:flex-start;
+}
+
+/* Let results fill remaining space and scroll */
+#optimization2 .opt2-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1em;                  /* breathing room for the table(s) */
+  text-align: left;              /* better for tables */
+}
+
+/* Button cosmetics only */
+#optimizeGeoBtn{
+  padding:.75em 1.5em;
+  font-size:1.1rem;
+  cursor:pointer;
+}

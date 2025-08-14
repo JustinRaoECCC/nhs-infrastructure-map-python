@@ -23,6 +23,20 @@ document.addEventListener('DOMContentLoaded', () => {
     dashPlaceholder.style.display     = 'none';
     stationPlaceholder.style.display  = 'none';
     inventorPlaceholder.style.display = 'none';
+
+    // Reset Optimization I & II back to "just the buttons" whenever we leave the Dashboard
+    const opt1Btn  = dashPlaceholder.querySelector('#optimizeBtn');
+    const opt2Btn  = dashPlaceholder.querySelector('#optimizeGeoBtn');
+    const optPane  =
+      dashPlaceholder.querySelector('#optimization .opt-container') ||
+      dashPlaceholder.querySelector('#optimization');
+    const opt2Pane =
+      dashPlaceholder.querySelector('#optimization2 .opt2-container') ||
+      dashPlaceholder.querySelector('#optimization2');
+    if (opt1Btn)  opt1Btn.style.display  = '';
+    if (opt2Btn)  opt2Btn.style.display  = '';
+    if (optPane)  optPane.querySelectorAll('pre, ol, table.opt-table').forEach(el => el.remove());
+    if (opt2Pane) opt2Pane.innerHTML = '';
   }
 
   // Inventor View

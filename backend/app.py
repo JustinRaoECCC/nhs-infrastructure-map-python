@@ -29,6 +29,7 @@ from .data_nuke import data_nuke
 from .bulk_importer import get_sheet_names, import_sheet_data
 from .repairs_manager import save_repair
 from .algorithm import optimize_workplan as _optimize_workplan
+from backend.geographical_algorithm import run_geographical_algorithm
 
 # ─── Station file constants ─────────────────────────────────────────────────
 HERE = os.path.dirname(__file__)
