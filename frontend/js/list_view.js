@@ -4,35 +4,21 @@
 function showStationDetails(stn) {
   const container = document.getElementById('station-details');
 
+  // Remove the placeholder text if present
+  const placeholder = container.querySelector('p');
+  if (placeholder) placeholder.remove();
+
   // Persistent shell
-  let toolbar = container.querySelector('.station-toolbar');
-  let file    = container.querySelector('input.import-data-file');
+  const toolbar = container.querySelector('.station-toolbar');
+  const file    = container.querySelector('input.import-data-file');
   let body    = container.querySelector('.station-details-body');
 
-  if (!toolbar) {
-    toolbar = document.createElement('div');
-    toolbar.className = 'station-toolbar';
-    toolbar.style = 'display:flex; justify-content:flex-end; margin-bottom:6px;';
-    const btn = document.createElement('button');
-    btn.className = 'btn-import-data';
-    btn.textContent = 'Import Data';
-    btn.title = 'Populate only empty fields for this station from an Excel file';
-    file = document.createElement('input');
-    file.type = 'file';
-    file.className = 'import-data-file';
-    file.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    file.style.display = 'none';
-    btn.addEventListener('click', () => file.click());
-    toolbar.appendChild(btn);
-    container.prepend(toolbar);
-    container.appendChild(file);
-  }
   if (!body) {
     body = document.createElement('div');
     body.className = 'station-details-body';
     container.appendChild(body);
   }
-  if (!file._wired) {
+  if (file && !file._wired) {
     file.addEventListener('change', async (e) => {
       const f = (e.target.files || [])[0];
       if (!f) return;
@@ -45,7 +31,7 @@ function showStationDetails(stn) {
         console.log('Station:', stn.station_id, stn.name);
         console.log('File:', f.name);
         if (typeof stationDataCache !== 'undefined') { stationDataCache = null; }
-        const res = await window.electronAPI.importFieldsForStation(stn.station_id, b64);
+        const res = await window.electronAPI.importMultipleStations(b64);
         console.log('Response:', res);
         if (res && res.debug) {
           if (res.debug.importer) console.log('Debug.importer:', res.debug.importer);

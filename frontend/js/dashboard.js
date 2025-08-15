@@ -42,6 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
     rightPanel.style.display         = 'none';
     stationPlaceholder.style.display = 'none';
 
+    // ✅ Restore filters panel when entering dashboard
+    const filtersPanel = document.querySelector('.left-panel');
+    if (filtersPanel) filtersPanel.style.display = '';
+
     // Ensure the dashboard markup exists *before* we touch #optimization
     if (!dashPlaceholder.innerHTML.trim()) {
       const html = await fetch('dashboard.html').then(r => r.text());
@@ -406,6 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function initDashboardUI() {
 
     window.__repairsImportCache = window.__repairsImportCache || [];
+    window.__dashboardReady = false;
 
     // ─── Elements ─────────────────────────────────────────────────────────────
     const tabs               = document.querySelectorAll('.dashboard-tab');
@@ -1044,6 +1049,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     recalcPercentageTotal();
+
+    // ── Expose a small public API for other pages to refresh the Workplan ──
+    // These functions live inside initDashboardUI; export stable wrappers:
+    window.dashboardAPI = {
+      refreshWorkplanFromCache: async () => {
+        try {
+          await loadWorkplan();            // rebuild headers/body
+          await populateWorkplanFromImport(); // append cached imports
+        } catch (e) {
+          console.error('[dashboardAPI] refreshWorkplanFromCache failed:', e);
+        }
+      }
+    };
+    // signal that dashboard is ready
+    window.__dashboardReady = true;
+
   }
 
   function recalcPercentageTotal() {

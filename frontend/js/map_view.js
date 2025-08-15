@@ -107,29 +107,14 @@ window.refreshMarkers();
 function showStationDetails(stn) {
   const container = document.getElementById('station-details');
 
-  // ─── Ensure persistent shell (toolbar + body) ───────────────────────────
-  let toolbar = container.querySelector('.station-toolbar');
-  let file    = container.querySelector('input.import-data-file');
-  let body    = container.querySelector('.station-details-body');
+  // Remove the placeholder text if present
+  const placeholder = container.querySelector('p');
+  if (placeholder) placeholder.remove();
 
-  if (!toolbar) {
-    toolbar = document.createElement('div');
-    toolbar.className = 'station-toolbar';
-    toolbar.style = 'display:flex; justify-content:flex-end; margin-bottom:6px;';
-    const btn = document.createElement('button');
-    btn.className = 'btn-import-data';
-    btn.textContent = 'Import Data';
-    btn.title = 'Populate only empty fields for this station from an Excel file';
-    file = document.createElement('input');
-    file.type = 'file';
-    file.className = 'import-data-file';
-    file.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    file.style.display = 'none';
-    btn.addEventListener('click', () => file.click());
-    toolbar.appendChild(btn);
-    container.prepend(toolbar);
-    container.appendChild(file);
-  }
+  // ─── Ensure persistent shell (toolbar + body) ───────────────────────────
+  const toolbar = container.querySelector('.station-toolbar');
+  const file    = container.querySelector('input.import-data-file');
+  let body    = container.querySelector('.station-details-body');
 
   if (!body) {
     body = document.createElement('div');
@@ -138,7 +123,7 @@ function showStationDetails(stn) {
   }
 
   // One-time file handler
-  if (!file._wired) {
+  if (file && !file._wired) {
     file.addEventListener('change', async (e) => {
       const f = (e.target.files || [])[0];
       if (!f) return;
@@ -155,7 +140,7 @@ function showStationDetails(stn) {
           // piggyback on same cache var used elsewhere
           if (typeof stationDataCache !== 'undefined') { stationDataCache = null; }
         }
-        const res = await window.electronAPI.importFieldsForStation(stn.station_id, b64);
+        const res = await window.electronAPI.importMultipleStations(b64);
         console.log('Response:', res);
         if (res && res.debug) {
           if (res.debug.importer) console.log('Debug.importer:', res.debug.importer);

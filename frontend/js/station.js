@@ -6,6 +6,52 @@ let currentStation = null;
 
 // ─── Wire up all of the station‑detail buttons/handlers after the snippet is injected ───
 function wireUpStationEventHandlers() {
+
+  // ── Export Repairs to Dashboard ───────────────────────────────────────────
+  const exportRepairsBtn = document.getElementById('btnExportRepairs');
+  if (exportRepairsBtn) {
+    exportRepairsBtn.addEventListener('click', async () => {
+      if (!currentStation || !currentStation.station_id) {
+        return alert('No station selected.');
+      }
+      // Fetch saved repairs for this station
+      const repairs = await window.electronAPI.getRepairs(currentStation.station_id);
+      if (!repairs || !repairs.length) {
+        return alert('No repairs to export.');
+      }
+      // Append to dashboard cache
+      window.__repairsImportCache = window.__repairsImportCache || [];
+      window.__repairsImportCache.push(...repairs);
+      alert(`Exported ${repairs.length} repair(s) to dashboard.`);
+
+      // Switch to dashboard view → then show Workplan and refresh table from cache
+      document.getElementById('btn-dashboard-view')?.click();
+
+      // Wait until the dashboard has finished initializing and exposed its API
+      const waitFor = (pred, ms=3000, step=50) =>
+        new Promise((resolve, reject) => {
+          const t0 = Date.now();
+          const tick = () => {
+            if (pred()) return resolve(true);
+            if (Date.now() - t0 > ms) return reject(new Error('timeout'));
+            setTimeout(tick, step);
+          };
+          tick();
+        });
+
+      try {
+        await waitFor(() => window.__dashboardReady && window.dashboardAPI);
+        // Open the Workplan tab
+        document.querySelector('.dashboard-tab[data-target="workplan"]')?.click();
+        // Rebuild headers/body and append from cache (non-destructive)
+        await window.dashboardAPI.refreshWorkplanFromCache();
+      } catch (e) {
+        console.warn('Dashboard not ready in time; the rows will appear on next open.', e);
+      }
+
+    });
+  }
+
   console.log('🔧 wireUpStationEventHandlers invoked');
 
   let resolveMode = false;
@@ -97,6 +143,17 @@ function wireUpStationEventHandlers() {
           currentStation.station_id,
           dataIdx
         );
+        // Remove matching repair from dashboard cache if present
+        if (window.__repairsImportCache) {
+          const repairName = tr.children[0]?.textContent?.trim();
+          window.__repairsImportCache = window.__repairsImportCache.filter(r =>
+            !(String(r['Repair Name']).trim() === repairName &&
+              String(r['Station Number']).trim() === String(currentStation.station_id))
+          );
+        }
+        if (tr && tr.parentNode) {
+          tr.parentNode.removeChild(tr); // safer removal
+        }
       }
 
       // exit resolve mode
@@ -104,21 +161,10 @@ function wireUpStationEventHandlers() {
       resolveBtn.textContent = 'Resolve Repairs';
       repairsTable.classList.remove('resolve-mode');
 
-      // refresh the table
-      const tbody = document.querySelector('#existingRepairsTable tbody');
-      const repairs = await window.electronAPI.getRepairs(currentStation.station_id);
-      tbody.innerHTML = '';
-      repairs.forEach(r => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${r['Repair Name']}</td>
-          <td>${r['Severity Ranking']}</td>
-          <td>${r['Priority Ranking']}</td>
-          <td>${r['Repair Cost']}</td>
-          <td>${r['Category']}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+      if (window.dashboardAPI?.refreshWorkplanFromCache) {
+        await window.dashboardAPI.refreshWorkplanFromCache();
+      }
+      
       return;
     }
 
@@ -536,6 +582,7 @@ async function deleteStation() {
   const res = await eel.delete_station(sid)();
   if (res.success) {
     hideStationView();
+    if (window.refreshMarkers) window.refreshMarkers();
   } else {
     alert('Error deleting: ' + (res.message||JSON.stringify(res)));
   }

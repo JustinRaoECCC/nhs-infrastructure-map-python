@@ -267,22 +267,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Save general info, reveal Create & Sections UI ──────────────────────────
   btnSaveGeneralInfo.addEventListener('click', () => {
-    const sid = inputStationId.value.trim();
-    if (!sid) {
-      createStationMessage.textContent = 'Station ID required';
-      return;
-    }
-    if (existingStationIDs.has(sid)) {
-      createStationMessage.textContent = `Station ID "${sid}" exists`;
-      return;
-    }
-    const lat = parseFloat(inputLatitude.value);
-    const lon = parseFloat(inputLongitude.value);
-    if (isNaN(lat) || isNaN(lon)) {
-      createStationMessage.textContent = 'Invalid coordinates';
+    const sid   = inputStationId.value.trim();
+    const name  = inputSiteName.value.trim();
+    const stat  = inputStatus.value.trim();
+    const lat   = parseFloat(inputLatitude.value);
+    const lon   = parseFloat(inputLongitude.value);
+
+    // 1. Check blanks
+    if (!sid || !name || !stat || isNaN(lat) || isNaN(lon)) {
+      createStationMessage.textContent = 'All fields must be filled in.';
       return;
     }
 
+    // 2. Check ID uniqueness
+    if (existingStationIDs.has(sid)) {
+      createStationMessage.textContent = `Station ID "${sid}" already exists.`;
+      return;
+    }
+
+    // 3. Check lat/lon range
+    if (lat < -90 || lat > 90) {
+      createStationMessage.textContent = 'Latitude must be between -90 and 90.';
+      return;
+    }
+    if (lon < -180 || lon > 180) {
+      createStationMessage.textContent = 'Longitude must be between -180 and 180.';
+      return;
+    }
+
+    // All good — enable creation
     btnSaveGeneralInfo.style.display = 'none';
     btnCreateStation.style.display   = 'inline-block';
     createStationMessage.textContent  = '';

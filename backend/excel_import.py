@@ -1,7 +1,7 @@
 # backend/excel_import.py
 import base64
 import io
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import eel
 import openpyxl
@@ -12,16 +12,14 @@ def set_dm(dm_obj):
     global _dm
     _dm = dm_obj
 
-ID_HEADERS = ['Station ID', 'Station Number', 'StationID', 'Station_Id', 'Station Number']
-
 @eel.expose
-def import_fields_for_station(station_id: str, file_b64: str):
+def import_multiple_stations(file_b64: str):
     """
-    Read the first worksheet of the uploaded Excel, locate the row matching station_id
-    (by any common ID header), and merge only empty cells for headers that already
-    exist in the station's sheet. Never creates columns.
+    Import multiple stations from an Excel file.
+    Each row must contain at least: Station ID, Asset Type, Site Name, Province, Latitude, Longitude, Status
+    Extra columns with "Section – Field" format will be treated as extraSections.
     """
-    dbg: Dict[str, Any] = {"stage": "start"}
+    dbg: Dict[str, Any] = {"stage": "start", "imported": 0, "skipped": 0, "errors": []}
     try:
         data = base64.b64decode(file_b64)
         wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
@@ -31,94 +29,65 @@ def import_fields_for_station(station_id: str, file_b64: str):
     except Exception as e:
         return {"success": False, "message": f"Could not read Excel: {e}", "debug": dbg}
 
-    # Helper: normalize station IDs -> uppercase, strip whitespace, drop trailing X's
-    def _norm_sid(s) -> str:
-        if s is None:
-            return ""
-        t = str(s).strip().upper()
-        t = "".join(t.split())           # remove all internal whitespace
-        t = t.rstrip("X")                # drop any trailing X (one or many)
-        return t
-
-    # Read header row: assume first non-empty row is headers
-
-    headers: List[str] = []
-    header_row_idx = None
-    dbg["header_probe"] = []
-    max_probe = min(10, ws.max_row or 0)
-    for r in range(1, max_probe + 1):
-        row_vals = [c.value for c in ws[r]]
-        dbg["header_probe"].append([None if v is None else str(v) for v in row_vals])
-        if any(v is not None and str(v).strip() for v in row_vals):
-            headers = [str(v).strip() if v is not None else '' for v in row_vals]
-            header_row_idx = r
-            break
-    if not headers:
-        dbg["reason"] = "no_headers"
-        return {"success": False, "message": "No header row found in Excel.", "debug": dbg}
-    dbg["header_row_idx"] = header_row_idx
+    # Extract headers from the first row
+    headers = [str(c.value).strip() if c.value else '' for c in ws[1]]
     dbg["headers"] = headers
 
-    # Find ID column
-    id_cols = [i for i, h in enumerate(headers) if h and h.strip() in ID_HEADERS]
-    dbg["id_header_candidates"] = ID_HEADERS
-    dbg["id_cols_found"] = id_cols
-    if not id_cols:
-        dbg["reason"] = "no_id_col"
-        return {"success": False, "message": "No Station ID column found in Excel.", "debug": dbg}
-    id_col = id_cols[0] + 1  # 1-based
-    dbg["id_col_index_1based"] = id_col
-    dbg["id_col_header"] = headers[id_cols[0]] if id_cols else None
-
-    sid_raw = str(station_id or '').strip()
-    sid = _norm_sid(sid_raw)
-    dbg["station_id_in"] = station_id
-    dbg["station_id_norm"] = sid
-    if not sid:
-        return {"success": False, "message": "Missing station_id"}
-
-    # Find row for this station
-    target_row = None
-    sample_ids = []
-    sample_ids_norm = []
-    scan_start = (header_row_idx or 1) + 1
-    for r in range(scan_start, ws.max_row + 1):
-        val = ws.cell(row=r, column=id_col).value
-        raw = None if val is None else str(val).strip()
-        norm = _norm_sid(val)
-        if len(sample_ids) < 15:
-            sample_ids.append(raw)
-            sample_ids_norm.append(norm)
-        if norm == sid:
-            target_row = r
-            break
-    dbg["scanned_rows"] = ws.max_row - scan_start + 1
-    dbg["sample_first_ids"] = sample_ids
-    dbg["sample_first_ids_norm"] = sample_ids_norm
-    if not target_row:
-        dbg["reason"] = "no_row_match"
-        return {"success": False, "message": f"Station '{sid}' not found in uploaded Excel.", "debug": dbg}
-
-    # Build mapping header -> value for that row
-    mapping: Dict[str, Any] = {}
-    for c, h in enumerate(headers, start=1):
-        if not h:
-            continue
-        if h in ID_HEADERS:
-            continue  # never overwrite Station ID
-        mapping[h] = ws.cell(row=target_row, column=c).value
-    dbg["mapping_keys"] = list(mapping.keys())
-
-    # Delegate to ExcelRepo merge (safe write, no new columns)
     try:
-        if _dm is None:
-            dbg["reason"] = "dm_not_injected"
-            return {"success": False, "message": "DataManager not initialized", "debug": dbg}
-        repo = _dm.excel  # ExcelRepo instance
-        res = repo.merge_fields_for_station(sid, mapping)
-        if isinstance(res, dict):
-            res.setdefault("debug", {}).update({"importer": dbg})
-        return res
-    except Exception as e:
-        dbg["exception"] = str(e)
-        return {"success": False, "message": f"Merge failed: {e}", "debug": dbg}
+        id_idx = headers.index("Station ID")
+    except ValueError:
+        dbg["reason"] = "missing_station_id_col"
+        return {"success": False, "message": "Missing 'Station ID' column", "debug": dbg}
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or not any(row):
+            dbg["skipped"] += 1
+            continue
+
+        row_dict = {headers[i]: v for i, v in enumerate(row) if i < len(headers)}
+        try:
+            station_id = str(row_dict.get("Station ID", "")).strip()
+            if not station_id:
+                dbg["skipped"] += 1
+                continue
+
+            general = {
+                "stationId": station_id,
+                "siteName":  row_dict.get("Site Name", ""),
+                "province":  row_dict.get("Province", ""),
+                "latitude":  row_dict.get("Latitude", 0),
+                "longitude": row_dict.get("Longitude", 0),
+                "status":    row_dict.get("Status", "")
+            }
+
+            extras = {}
+            for k, v in row_dict.items():
+                if k in general or k in ["Station ID", "Asset Type", "Site Name", "Province", "Latitude", "Longitude", "Status"]:
+                    continue
+                if " – " not in k:
+                    continue
+                sec, fld = k.split(" – ", 1)
+                extras.setdefault(sec, {})[fld] = v
+
+            station_obj = {
+                "assetType": row_dict.get("Asset Type", ""),
+                "generalInfo": general,
+                "extraSections": extras
+            }
+
+            if _dm is None:
+                dbg["reason"] = "dm_not_injected"
+                return {"success": False, "message": "DataManager not initialized", "debug": dbg}
+
+            _dm.create_station(station_obj)
+            dbg["imported"] += 1
+
+        except Exception as err:
+            dbg["errors"].append({"row": row_dict, "error": str(err)})
+            dbg["skipped"] += 1
+
+    return {
+        "success": True,
+        "message": f"Imported {dbg['imported']} station(s), skipped {dbg['skipped']}",
+        "debug": dbg
+    }

@@ -83,6 +83,17 @@
 
         <!-- Right Details Panel -->
         <aside class="right-panel" id="rightPanel">
+          <div class="station-toolbar" style="display:flex; justify-content:flex-end; margin-bottom:6px;">
+            <button class="btn-import-data"
+                    title="Populate only empty fields for this station from an Excel file"
+                    onclick="document.querySelector('.import-data-file').click()">
+              Import Data
+            </button>
+            <input type="file"
+                   class="import-data-file"
+                   accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                   style="display:none" />
+          </div>
           <h2>Station Details</h2>
           <div id="station-details">
             <p><em>Click a pin to see details</em></p>
@@ -136,7 +147,7 @@
           <input id="inputStatus"           placeholder="Status"/>
           <input id="inputLatitude"  type="number" step="any" placeholder="Latitude" required/>
           <input id="inputLongitude" type="number" step="any" placeholder="Longitude" required/>
-          <button id="btnSaveGeneralInfo" type="button">Save Info</button>
+          <button id="btnSaveGeneralInfo" type="button">Save General Information</button>
           <button id="btnCreateStation"    type="button" style="display:none;">Create Station</button>
           <p id="createStationMessage"></p>
         </form>
