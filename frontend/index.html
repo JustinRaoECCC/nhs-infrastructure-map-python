@@ -84,12 +84,13 @@
         <!-- Right Details Panel -->
         <aside class="right-panel" id="rightPanel">
           <div class="station-toolbar" style="display:flex; justify-content:flex-end; margin-bottom:6px;">
-            <button class="btn-import-data"
-                    title="Populate only empty fields for this station from an Excel file"
-                    onclick="document.querySelector('.import-data-file').click()">
+            <button id="btnImportDataGlobal"
+                    class="btn-import-data"
+                    title="Populate only empty fields from an Excel file">
               Import Data
             </button>
-            <input type="file"
+            <input id="fileImportDataGlobal"
+                   type="file"
                    class="import-data-file"
                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                    style="display:none" />

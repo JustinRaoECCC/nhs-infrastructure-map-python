@@ -88,5 +88,15 @@ window.electronAPI = {
   optimizeWorkplan:           (payload)     => eel.optimize_workplan(payload)(),
   importRepairsExcel:       b64 => eel.import_repairs_excel(b64)(),
   // — Import-only field merge for a single station —
-  importFieldsForStation:   (stationId, b64) => eel.import_fields_for_station(stationId, b64)(),
+  importMultipleStations:   async (b64) => {
+    console.log('[data_api] → eel.import_multiple_stations(...)');
+    try {
+      const res = await eel.import_multiple_stations(b64)();
+      console.log('[data_api] ← result from python:', res);
+      return res;
+    } catch (err) {
+      console.error('[data_api] EEL call failed:', err);
+      return { success: false, message: String(err) };
+    }
+  },
 };

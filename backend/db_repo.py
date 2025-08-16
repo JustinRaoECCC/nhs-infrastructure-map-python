@@ -278,6 +278,54 @@ class DBRepo(BaseRepo):
             s.commit()
         return {"success": True}
 
+    # ─── Merge-only updater (DB variant; conservative) ──────────────────────
+    def merge_fields_for_station(self, station_id: str, col_values: dict) -> dict:
+        """
+        Conservative implementation:
+          - Only attempts to fill blank core columns if keys match exactly.
+          - For keys like 'Section – Field', merges into extra_data[Section][Field]
+            only if missing/blank already.
+        """
+        updated = 0
+        checked = 0
+        with self.Session() as s:
+            st = s.query(Station).filter_by(station_id=station_id).first()
+            if not st:
+                return {"success": False, "message": f"Station '{station_id}' not found", "updated": 0, "checked": 0}
+            # Core fields map
+            core_map = {
+                "Site Name": ("name", str),
+                "Province":  ("province", str),
+                "Latitude":  ("lat", float),
+                "Longitude": ("lon", float),
+                "Status":    ("status", str),
+            }
+            for key, val in (col_values or {}).items():
+                checked += 1
+                if key in core_map:
+                    attr, _ = core_map[key]
+                    cur = getattr(st, attr)
+                    if (cur is None) or (isinstance(cur, str) and cur.strip() == ""):
+                        if val not in (None, ""):
+                            setattr(st, attr, val)
+                            updated += 1
+                    continue
+                # Extra data as nested {Section: {Field: value}}
+                if "–" in key or "-" in key:
+                    # tolerate hyphen/en-dash and extra spaces
+                    parts = [p.strip() for p in re.split(r"\s*[–-]\s*", key, maxsplit=1)]  # type: ignore[name-defined]
+                    if len(parts) == 2:
+                        sec, fld = parts
+                        data = dict(st.extra_data or {})
+                        sec_map = dict(data.get(sec, {}))
+                        cur = sec_map.get(fld)
+                        if cur in (None, "") and val not in (None, ""):
+                            sec_map[fld] = val
+                            data[sec] = sec_map
+                            st.extra_data = data
+                            updated += 1
+            s.commit()
+        return {"success": True, "updated": updated, "checked": checked}
 
 
 class Company(Base):

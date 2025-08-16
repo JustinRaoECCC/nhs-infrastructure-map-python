@@ -103,6 +103,80 @@ window.refreshMarkers = async function() {
 console.log('🔷 [map_view] initial refreshMarkers()');
 window.refreshMarkers();
 
+// ─── Global Import (always-present toolbar in the right panel) ─────────────
+function bindGlobalImportToolbar() {
+  const btn  = document.getElementById('btnImportDataGlobal');
+  const file = document.getElementById('fileImportDataGlobal');
+  if (!btn || !file) {
+    console.warn('[GlobalImport] toolbar elements not found');
+    return;
+  }
+  if (!btn.dataset.bound) {
+    btn.addEventListener('click', () => {
+      console.log('[GlobalImport] Import button clicked');
+      file.click();
+    });
+    btn.dataset.bound = '1';
+  }
+  if (!file.dataset.bound) {
+    file.addEventListener('change', async (e) => {
+      const f = (e.target.files || [])[0];
+      console.log('[GlobalImport] file change fired:', f?.name);
+      if (!f) return;
+      try {
+        // SAFER: use FileReader to avoid stack overflow on large files
+        const b64 = await new Promise((resolve, reject) => {
+          const rdr = new FileReader();
+          rdr.onload = () => {
+            try {
+              const s = String(rdr.result || '');
+              const i = s.indexOf(',');
+              resolve(i >= 0 ? s.slice(i + 1) : s); // strip data: prefix
+            } catch (err) { reject(err); }
+          };
+          rdr.onerror = reject;
+          rdr.readAsDataURL(f);
+        });
+        if (typeof stationDataCache !== 'undefined') stationDataCache = null;
+        console.log('[GlobalImport] calling electronAPI.importMultipleStations(...)');
+        const res  = await window.electronAPI.importMultipleStations(b64);
+        console.log('[GlobalImport] result:', res);
+        if (!res || !res.success) {
+          alert('Import failed: ' + (res?.message || 'Unknown error'));
+          return;
+        }
+        // Refresh map + list
+        if (window.refreshMarkers) await window.refreshMarkers();
+        if (window.renderList)     await window.renderList();
+        // If a station is currently shown, try to re-render it with fresh data
+        try {
+          const details = document.getElementById('station-details');
+          let currentId = null;
+          details.querySelectorAll('tr').forEach(tr => {
+            const th = tr.querySelector('th');
+            const td = tr.querySelector('td');
+            if (th && /station id/i.test(th.textContent || '')) {
+              currentId = (td?.textContent || '').trim();
+            }
+          });
+          if (currentId) {
+            const all = await window.electronAPI.getStationData();
+            const found = (all || []).find(s => String(s.station_id) === String(currentId));
+            if (found) showStationDetails(found);
+          }
+        } catch (_) {}
+      } catch (err) {
+        console.error('[GlobalImport] unexpected error:', err);
+        alert('Unexpected error during import. See console.');
+      } finally {
+        e.target.value = '';
+      }
+    });
+    file.dataset.bound = '1';
+  }
+}
+document.addEventListener('DOMContentLoaded', bindGlobalImportToolbar);
+
 // ─── Helper: fill in the RHS pane ─────────────────────────────────────────
 function showStationDetails(stn) {
   const container = document.getElementById('station-details');
@@ -111,63 +185,14 @@ function showStationDetails(stn) {
   const placeholder = container.querySelector('p');
   if (placeholder) placeholder.remove();
 
-  // ─── Ensure persistent shell (toolbar + body) ───────────────────────────
-  const toolbar = container.querySelector('.station-toolbar');
-  const file    = container.querySelector('input.import-data-file');
-  let body    = container.querySelector('.station-details-body');
+  // ─── Only ensure body; toolbar is global in #rightPanel ────────────────
+  let body = container.querySelector('.station-details-body');
 
   if (!body) {
     body = document.createElement('div');
     body.className = 'station-details-body';
     container.appendChild(body);
   }
-
-  // One-time file handler
-  if (file && !file._wired) {
-    file.addEventListener('change', async (e) => {
-      const f = (e.target.files || [])[0];
-      if (!f) return;
-      const buf = await f.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = ''; for (let b of bytes) bin += String.fromCharCode(b);
-      const b64 = btoa(bin);
-      try {
-        console.group('[Import Data]');
-        console.log('Station:', stn.station_id, stn.name);
-        console.log('File:', f.name);
-        // invalidate cache before import so a subsequent getStationData() refetches
-        if (window.electronAPI && typeof window.electronAPI.createNewStation === 'function') {
-          // piggyback on same cache var used elsewhere
-          if (typeof stationDataCache !== 'undefined') { stationDataCache = null; }
-        }
-        const res = await window.electronAPI.importMultipleStations(b64);
-        console.log('Response:', res);
-        if (res && res.debug) {
-          if (res.debug.importer) console.log('Debug.importer:', res.debug.importer);
-          if (res.debug.repo) console.log('Debug.repo:', res.debug.repo);
-          if (res.debug.updates) console.log('Debug.updates:', res.debug.updates);
-          if (res.debug.target) console.log('Debug.target:', res.debug.target);
-        }
-        if (!res || !res.success) {
-          alert('Import failed: ' + (res && res.message ? res.message : 'Unknown error'));
-        } else {
-          // Refresh markers and re-render RHS with fresh data
-          if (window.refreshMarkers) await window.refreshMarkers();
-          const data = await window.electronAPI.getStationData();
-          const fresh = (data || []).find(s => s.station_id === stn.station_id) || stn;
-          showStationDetails(fresh); // re-render body with fresh values
-        }
-      } catch (err) {
-        console.error('[Import Data] unexpected error', err);
-        alert('Unexpected error during import.');
-      } finally {
-        console.groupEnd();
-        e.target.value = '';
-      }
-    });
-    file._wired = true;
-  }
-
 
   // 1) fixed fields (General Information)
   const fixedOrder = [

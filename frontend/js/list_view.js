@@ -8,55 +8,15 @@ function showStationDetails(stn) {
   const placeholder = container.querySelector('p');
   if (placeholder) placeholder.remove();
 
-  // Persistent shell
-  const toolbar = container.querySelector('.station-toolbar');
-  const file    = container.querySelector('input.import-data-file');
-  let body    = container.querySelector('.station-details-body');
+  // Only body; toolbar is global in #rightPanel
+  let body = container.querySelector('.station-details-body');
 
   if (!body) {
     body = document.createElement('div');
     body.className = 'station-details-body';
     container.appendChild(body);
   }
-  if (file && !file._wired) {
-    file.addEventListener('change', async (e) => {
-      const f = (e.target.files || [])[0];
-      if (!f) return;
-      const buf = await f.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = ''; for (let b of bytes) bin += String.fromCharCode(b);
-      const b64 = btoa(bin);
-      try {
-        console.group('[Import Data]');
-        console.log('Station:', stn.station_id, stn.name);
-        console.log('File:', f.name);
-        if (typeof stationDataCache !== 'undefined') { stationDataCache = null; }
-        const res = await window.electronAPI.importMultipleStations(b64);
-        console.log('Response:', res);
-        if (res && res.debug) {
-          if (res.debug.importer) console.log('Debug.importer:', res.debug.importer);
-          if (res.debug.repo) console.log('Debug.repo:', res.debug.repo);
-          if (res.debug.updates) console.log('Debug.updates:', res.debug.updates);
-          if (res.debug.target) console.log('Debug.target:', res.debug.target);
-        }
-        if (!res || !res.success) {
-          alert('Import failed: ' + (res && res.message ? res.message : 'Unknown error'));
-        } else {
-          const data = await window.electronAPI.getStationData();
-          const fresh = (data || []).find(s => s.station_id === stn.station_id) || stn;
-          showStationDetails(fresh);
-        }
-      } catch (err) {
-        console.error('[Import Data] unexpected error', err);
-        alert('Unexpected error during import.');
-      } finally {
-        console.groupEnd();
-        e.target.value = '';
-      }
-    });
-    file._wired = true;
-  }
-
+  
   // 1) fixed fields
   const fixedOrder = [
     ['Station ID', stn.station_id],

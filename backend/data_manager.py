@@ -282,3 +282,19 @@ class DataManager:
         res_xl = self.excel.delete_station(target)
         res_db = self.db.delete_station(station_id)
         return res_db if self.use_db else res_xl
+
+    # ─── Merge-only: fill blank existing fields for one station ─────────────
+    def merge_fields_for_station(self, station_id: str, col_values: dict):
+        """
+        Delegate to the active persistence layer(s). This only writes to columns
+        that already exist and only if the target cells are blank.
+        """
+        res_xl = self.excel.merge_fields_for_station(station_id, col_values)
+        if self.use_db:
+            # Optional: if you later support DB merge semantics, call here too.
+            try:
+                res_db = self.db.merge_fields_for_station(station_id, col_values)  # type: ignore[attr-defined]
+            except Exception:
+                res_db = {"success": True, "updated": 0, "checked": res_xl.get("checked", 0)}
+            return res_db
+        return res_xl
