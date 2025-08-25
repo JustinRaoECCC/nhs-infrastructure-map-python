@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Always start fresh when entering the dashboard
     resetOptimizationViews();
 
-    startOptimizationObserver();
+    await startOptimizationObserver();
 
     // ── Optimization II: Geographical Order Workplan ─────────────────────────
     const geoBtn = dashPlaceholder.querySelector('#optimizeGeoBtn');
@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * into a table with columns:
      * Rank | Station Name | Station ID | Operation | Summed Value
      */
-    function renderOptimizationTable(inputLines) {
+    async function renderOptimizationTable(inputLines) {
       // use the same resolved pane (fallback to query if needed)
       const pane =
         (typeof optPane !== 'undefined' && optPane) ||
@@ -281,7 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!Array.isArray(lines) || !lines.length) return;
 
       // Parse lines -> rows
-      const rows = lines.map(parseOptimizationLine).filter(Boolean);
+      const stationList = await window.electronAPI.getStationData();
+      const stationNameLookup = Object.fromEntries(
+        (stationList || []).map(s => [String(s.station_id), String(s.name || '')])
+      );
+      const rows = lines.map(line => parseOptimizationLine(line, stationNameLookup)).filter(Boolean);
 
       // Sort by numeric summed value (desc) and assign rank
       rows.sort((a, b) => (b.summedValue ?? 0) - (a.summedValue ?? 0));
@@ -326,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * "1. 08GA022 | - Fix LB platform flooring mesh tipping hazard | 75%"
      * → { stationId, stationName, operation, summedValue }
      */
-    function parseOptimizationLine(line) {
+    function parseOptimizationLine(line, stationNameLookup = {}) {
       if (!line) return null;
       let s = line.trim();
 
@@ -403,7 +407,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnInventorView) btnInventorView.addEventListener('click', () => resetOptimizationViews());
   btnDashboard.addEventListener('click', e => {
     e.preventDefault();
-    showDashboard();
+    (async () => {
+      await showDashboard();
+    })();
   });
 
   // ─── Initialize Dashboard UI ───────────────────────────────────────────────

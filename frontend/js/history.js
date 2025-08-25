@@ -17,10 +17,10 @@ function dlog(...args) {
 }
 
 // BASE STATION FOLDER
-const SERVER_STATIONS_ROOT = '\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\';
+// const SERVER_STATIONS_ROOT = '\\\\Ecbcv6cwvfsp001.ncr.int.ec.gc.ca\\msc$\\401\\WSCConstruction\\Stations\\';
 
 
-// const SERVER_STATIONS_ROOT = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\`;
+const SERVER_STATIONS_ROOT = `C:\\Users\\nitsu\\OneDrive\\Documents\\Stations\\`;
 
 // Name-based classification fallback
 const IS_INSPECTION_NAME = /(inspection|assessment|site\s*visit|sitevisit|visit)/i;
@@ -508,17 +508,19 @@ async function renderHistoryFolder(kind, rootEl, folderNode) {
   const actions = document.createElement('div');
   actions.style = 'margin-top:6px; display:flex; gap:8px; align-items:center;';
 
-  const btnReport = document.createElement('button');
-  btnReport.textContent =
-    kind === 'inspection' ? 'Inspection Report' : 'Open Report';
-  btnReport.addEventListener('click', async () => {
-    const pdfPath = findInspectionPdf(folderNode);
-    if (!pdfPath) {
-      alert('No inspection PDF found in this folder.');
-      return;
-    }
-    await openPdfInApp(pdfPath);
-  });
+  let btnReport = null;
+  if (kind === 'inspection') {
+    btnReport = document.createElement('button');
+    btnReport.textContent = 'Inspection Report';
+    btnReport.addEventListener('click', async () => {
+      const pdfPath = findInspectionPdf(folderNode);
+      if (!pdfPath) {
+        alert('No inspection PDF found in this folder.');
+        return;
+      }
+      await openPdfInApp(pdfPath);
+    });
+  }
 
   const btnDelete = document.createElement('button');
   btnDelete.textContent =
@@ -572,7 +574,8 @@ async function renderHistoryFolder(kind, rootEl, folderNode) {
   });
 
 
-  actions.append(btnReport, btnDelete);
+  if (btnReport) actions.append(btnReport);
+  actions.append(btnDelete);
   wrap.append(row, actions);
   // Tag with data so we can sort later even for one-off appends
   try {
